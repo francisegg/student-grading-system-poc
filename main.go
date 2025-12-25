@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -30,7 +32,8 @@ var (
 	googleOauthConfig *oauth2.Config
 )
 
-// 檢查是否為老師
+const TotalScoreColName = "Total learning-progress points"
+
 func isTeacher(email string) bool {
 	whitelist := os.Getenv("TEACHER_WHITELIST")
 	return strings.Contains(whitelist, email)
@@ -144,7 +147,7 @@ func main() {
 		c.Redirect(302, "/")
 	})
 
-	// --- 4. 學生看成績 ---
+	// --- 4. 學生看成績 (加入最大最小值計算) ---
 	r.GET("/my-grades", func(c *gin.Context) {
 		session := sessions.Default(c)
 		uid := session.Get("user_id")
@@ -153,10 +156,101 @@ func main() {
 		var s models.Student
 		db.First(&s, uid)
 
-		var grades []models.Grade
-		// 依照 ID 排序，確保圖表時間軸正確
-		db.Where("student_id = ?", s.StudentID).Order("id asc").Find(&grades)
-		c.HTML(200, "my_grades.html", gin.H{"User": s, "Grades": grades})
+		// A. 顯示用的詳細成績
+		var displayGrades []models.Grade
+		db.Where("student_id = ? AND item_name != ?", s.StudentID, TotalScoreColName).Order("id asc").Find(&displayGrades)
+
+		// B. 統計用的數據
+		var myTotalGrade models.Grade
+		var classTotals []float64
+
+		// 先找有沒有 "Total learning-progress points"
+		var totalRows []models.Grade
+		db.Where("item_name = ?", TotalScoreColName).Find(&totalRows)
+
+		if len(totalRows) > 0 {
+			for _, r := range totalRows {
+				classTotals = append(classTotals, r.Score)
+				if r.StudentID == s.StudentID {
+					myTotalGrade = r
+				}
+			}
+		} else {
+			// Fallback: 自己加總
+			var allGrades []models.Grade
+			db.Find(&allGrades)
+			studentMap := make(map[string]float64)
+			for _, g := range allGrades {
+				studentMap[g.StudentID] += g.Score
+			}
+			for sid, score := range studentMap {
+				classTotals = append(classTotals, score)
+				if sid == s.StudentID {
+					myTotalGrade.Score = score
+				}
+			}
+		}
+
+		myTotal := myTotalGrade.Score
+		
+		// 計算基本統計
+		sum := 0.0
+		minScore, maxScore := 1000.0, -1.0
+		for _, t := range classTotals { 
+			sum += t
+			if t < minScore { minScore = t }
+			if t > maxScore { maxScore = t }
+		}
+		if len(classTotals) == 0 { minScore, maxScore = 0, 0 }
+
+		mean := 0.0
+		if len(classTotals) > 0 { mean = sum / float64(len(classTotals)) }
+
+		varianceSum := 0.0
+		for _, t := range classTotals { varianceSum += math.Pow(t-mean, 2) }
+		stdDev := 0.0
+		if len(classTotals) > 0 { stdDev = math.Sqrt(varianceSum / float64(len(classTotals))) }
+
+		// 計算 PR
+		sort.Float64s(classTotals) // 這一步排序很重要 (由小到大)
+		rank := 0
+		for i, t := range classTotals {
+			if t >= myTotal { rank = i; break }
+			rank = i + 1
+		}
+		percentile := 0.0
+		if len(classTotals) > 1 {
+			percentile = (float64(rank) / float64(len(classTotals))) * 100
+		} else if len(classTotals) == 1 { percentile = 100 }
+
+		// --- 新增功能區 Start ---
+		
+		// 1. 取出前三名 (classTotals 已經是由小到大排序)
+		var top3 []float64
+		count := len(classTotals)
+		// 從後面 (最大值) 開始抓
+		for i := count - 1; i >= 0 && len(top3) < 3; i-- {
+			top3 = append(top3, classTotals[i])
+		}
+
+		// 2. 計算期末佔比 (100 - 目前總分)
+		finalWeight := 100.0 - myTotal
+		if finalWeight < 0 { finalWeight = 0 } // 防止超過100變負數
+
+		// --- 新增功能區 End ---
+
+		c.HTML(200, "my_grades.html", gin.H{
+			"User":        s,
+			"Grades":      displayGrades,
+			"MyTotal":     myTotal,
+			"ClassMean":   mean,
+			"ClassStdDev": stdDev,
+			"ClassMin":    minScore,
+			"ClassMax":    maxScore,
+			"Percentile":  int(percentile),
+			"Top3":        top3,        // 傳遞前三名
+			"FinalWeight": finalWeight, // 傳遞期末佔比
+		})
 	})
 
 	// --- 5. 老師功能 ---
@@ -179,94 +273,61 @@ func main() {
 		c.HTML(200, "teacher.html", gin.H{"AllGrades": allGrades})
 	})
 
-	// --- 升級版上傳功能 (支援動態欄位 & UTF-8) ---
 	teacher.POST("/upload", func(c *gin.Context) {
 		file, _ := c.FormFile("csv_file")
 		f, _ := file.Open()
 		defer f.Close()
 
-		// 直接使用 CSV Reader (Go 預設支援 UTF-8)
 		reader := csv.NewReader(f)
-		reader.FieldsPerRecord = -1 // 允許欄位長度不一致
+		reader.FieldsPerRecord = -1
 		records, err := reader.ReadAll()
-		if err != nil {
-			c.String(400, "CSV 讀取失敗: "+err.Error())
-			return
-		}
+		if err != nil { c.String(400, "CSV 讀取失敗"); return }
+		if len(records) < 2 { c.String(400, "無數據"); return }
 
-		if len(records) < 2 {
-			c.String(400, "CSV 內容為空或無數據")
-			return
-		}
-
-		// 1. 解析標題列，找出 "ID" 在第幾欄
 		header := records[0]
 		idIndex := -1
 		for i, colName := range header {
-			// 去除空格並忽略大小寫比較
 			if strings.EqualFold(strings.TrimSpace(colName), "ID") {
 				idIndex = i
 				break
 			}
 		}
+		if idIndex == -1 { c.String(400, "❌ 找不到 'ID' 欄位"); return }
 
-		if idIndex == -1 {
-			c.String(400, "❌ 找不到 'ID' 欄位，請檢查 CSV 標題")
-			return
-		}
-
-		// 定義要忽略的非成績欄位 (Metadata)
+		// 忽略欄位清單 (Total learning-progress points 需允許寫入)
 		ignoreCols := map[string]bool{
 			"No.": true, "Class": true, "ID": true, "Grade": true,
-			"Total learning-progress points": true, "Weight of final exam (%)": true,
+			"Weight of final exam (%)": true,
 		}
 
-		count := 0
-		// 2. 遍歷每一列數據
 		for i, row := range records {
-			if i == 0 { continue } // 跳過標題
-
-			// 取得學號
+			if i == 0 { continue }
 			if len(row) <= idIndex { continue }
 			studentID := strings.TrimSpace(row[idIndex])
 			if studentID == "" { continue }
 
-			// 3. 遍歷該列的所有欄位 (把每個欄位都當作一個成績項目)
 			for colIdx, cellValue := range row {
 				colName := strings.TrimSpace(header[colIdx])
+				if ignoreCols[colName] { continue }
 
-				// 如果是基本資料欄位，就跳過
-				if ignoreCols[colName] {
-					continue
-				}
-
-				// 處理分數 (處理 "缺考", "NaN", 空白)
 				var score float64
 				cellValue = strings.TrimSpace(cellValue)
-				if cellValue == "" || strings.EqualFold(cellValue, "NaN") {
-					continue // 空值不匯入
-				}
+				if cellValue == "" || strings.EqualFold(cellValue, "NaN") { continue }
 				
-				// 嘗試將文字轉為數字，失敗則預設為 0 (例如 '缺考')
 				if s, err := strconv.ParseFloat(cellValue, 64); err == nil {
 					score = s
-				} else {
-					score = 0
-				}
+				} else { score = 0 }
 
-				// 寫入資料庫
 				db.Clauses(clause.OnConflict{
 					Columns:   []clause.Column{{Name: "student_id"}, {Name: "item_name"}},
 					DoUpdates: clause.AssignmentColumns([]string{"score", "updated_at"}),
 				}).Create(&models.Grade{
 					StudentID: studentID,
-					ItemName:  colName, // 使用標題作為項目名稱 (如 "Midterm", "9/15")
+					ItemName:  colName,
 					Score:     score,
 				})
-				count++
 			}
 		}
-
 		c.Redirect(http.StatusSeeOther, "/teacher/dashboard")
 	})
 
