@@ -9,9 +9,10 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 
-	"grade-system/models" // 注意：這裡要跟你的 go.mod 名字一樣
+	"grade-system/models"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
@@ -22,9 +23,6 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-
-	"golang.org/x/text/encoding/traditionalchinese"
-	"golang.org/x/text/transform"
 )
 
 var (
@@ -32,19 +30,17 @@ var (
 	googleOauthConfig *oauth2.Config
 )
 
-// 檢查是否為老師 (白名單機制)
+// 檢查是否為老師
 func isTeacher(email string) bool {
 	whitelist := os.Getenv("TEACHER_WHITELIST")
 	return strings.Contains(whitelist, email)
 }
 
 func init() {
-	// 1. 載入 .env
 	if err := godotenv.Load(); err != nil {
 		log.Println("找不到 .env 檔案，使用系統變數")
 	}
 
-	// 2. 連線資料庫
 	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=Asia/Taipei",
 		os.Getenv("DB_HOST"), os.Getenv("DB_USER"), os.Getenv("DB_PASSWORD"), os.Getenv("DB_NAME"), os.Getenv("DB_PORT"))
 	var err error
@@ -52,10 +48,8 @@ func init() {
 	if err != nil {
 		log.Fatal("資料庫連線失敗: ", err)
 	}
-	// 自動建立資料表
 	db.AutoMigrate(&models.Student{}, &models.Grade{})
 
-	// 3. Google 設定
 	googleOauthConfig = &oauth2.Config{
 		ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
 		ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
@@ -67,7 +61,6 @@ func init() {
 
 func main() {
 	r := gin.Default()
-	// 設定 Session 密鑰
 	store := cookie.NewStore([]byte(os.Getenv("SESSION_SECRET")))
 	r.Use(sessions.Sessions("mysession", store))
 	r.LoadHTMLGlob("templates/*")
@@ -76,22 +69,16 @@ func main() {
 	r.GET("/", func(c *gin.Context) {
 		session := sessions.Default(c)
 		uid := session.Get("user_id")
-		
 		if uid == nil {
 			c.HTML(http.StatusOK, "index.html", gin.H{"Logged": false})
 			return
 		}
-
 		var s models.Student
 		db.First(&s, uid)
-		c.HTML(http.StatusOK, "index.html", gin.H{
-			"Logged":    true,
-			"User":      s,
-			"IsTeacher": isTeacher(s.Email),
-		})
+		c.HTML(http.StatusOK, "index.html", gin.H{"Logged": true, "User": s, "IsTeacher": isTeacher(s.Email)})
 	})
 
-	// --- 2. Google 登入流程 ---
+	// --- 2. 登入/登出 ---
 	r.GET("/login", func(c *gin.Context) {
 		url := googleOauthConfig.AuthCodeURL("state")
 		c.Redirect(http.StatusTemporaryRedirect, url)
@@ -99,10 +86,7 @@ func main() {
 
 	r.GET("/auth/callback", func(c *gin.Context) {
 		token, err := googleOauthConfig.Exchange(context.Background(), c.Query("code"))
-		if err != nil {
-			c.Redirect(302, "/")
-			return
-		}
+		if err != nil { c.Redirect(302, "/"); return }
 		
 		resp, _ := http.Get("https://www.googleapis.com/oauth2/v2/userinfo?access_token=" + token.AccessToken)
 		defer resp.Body.Close()
@@ -111,13 +95,10 @@ func main() {
 		var gUser struct{ Email, Name string }
 		json.Unmarshal(data, &gUser)
 
-		// 檢查資料庫
 		var s models.Student
 		result := db.Where("email = ?", gUser.Email).First(&s)
-
 		session := sessions.Default(c)
 		
-		// 如果是新用戶，或者還沒綁定學號 -> 去註冊頁
 		if result.Error == gorm.ErrRecordNotFound || s.StudentID == "" {
 			session.Set("temp_email", gUser.Email)
 			session.Set("temp_name", gUser.Name)
@@ -126,7 +107,6 @@ func main() {
 			return
 		}
 
-		// 登入成功
 		session.Set("user_id", s.ID)
 		session.Save()
 		c.Redirect(http.StatusSeeOther, "/")
@@ -139,7 +119,7 @@ func main() {
 		c.Redirect(302, "/")
 	})
 
-	// --- 3. 註冊綁定 ---
+	// --- 3. 註冊 ---
 	r.GET("/register", func(c *gin.Context) {
 		session := sessions.Default(c)
 		email := session.Get("temp_email")
@@ -152,22 +132,19 @@ func main() {
 		email := session.Get("temp_email")
 		name := session.Get("temp_name")
 		
-		// 寫入資料庫
 		var s models.Student
 		db.Where(models.Student{Email: email.(string)}).Attrs(models.Student{Name: name.(string)}).FirstOrCreate(&s)
-		
 		s.StudentID = c.PostForm("student_id")
 		s.Course = c.PostForm("course")
 		db.Save(&s)
 
-		// 更新 Session
 		session.Set("user_id", s.ID)
 		session.Delete("temp_email")
 		session.Save()
 		c.Redirect(302, "/")
 	})
 
-// --- 4. 學生查看成績 ---
+	// --- 4. 學生看成績 ---
 	r.GET("/my-grades", func(c *gin.Context) {
 		session := sessions.Default(c)
 		uid := session.Get("user_id")
@@ -177,21 +154,19 @@ func main() {
 		db.First(&s, uid)
 
 		var grades []models.Grade
-		// 修改這裡：加上 Order("id asc") 確保圖表時間軸正確
+		// 依照 ID 排序，確保圖表時間軸正確
 		db.Where("student_id = ?", s.StudentID).Order("id asc").Find(&grades)
-
 		c.HTML(200, "my_grades.html", gin.H{"User": s, "Grades": grades})
 	})
 
-	// --- 5. 老師後台 (需驗證權限) ---
+	// --- 5. 老師功能 ---
 	teacher := r.Group("/teacher")
 	teacher.Use(func(c *gin.Context) {
 		session := sessions.Default(c)
 		uid := session.Get("user_id")
 		var s models.Student
-		// 檢查是否登入 & 是否在白名單
 		if uid == nil || db.First(&s, uid).Error != nil || !isTeacher(s.Email) {
-			c.String(403, "🚫 權限不足：您不是授權的老師")
+			c.String(403, "🚫 權限不足")
 			c.Abort()
 			return
 		}
@@ -199,84 +174,105 @@ func main() {
 	})
 
 	teacher.GET("/dashboard", func(c *gin.Context) {
-		// 1. 撈出所有成績
 		var allGrades []models.Grade
-		// 這裡使用 Preload 或是簡單查詢，我們先用簡單查詢並按時間排序
 		db.Order("created_at desc").Find(&allGrades)
-
-		// 2. 傳給 HTML
-		c.HTML(200, "teacher.html", gin.H{
-			"AllGrades": allGrades,
-		})
+		c.HTML(200, "teacher.html", gin.H{"AllGrades": allGrades})
 	})
 
+	// --- 升級版上傳功能 (支援動態欄位 & UTF-8) ---
 	teacher.POST("/upload", func(c *gin.Context) {
 		file, _ := c.FormFile("csv_file")
 		f, _ := file.Open()
-		defer f.Close() // 養成好習慣，記得關檔
+		defer f.Close()
 
-		// --- 關鍵修正開始 ---
-		// 建立一個轉換器：將 Big5 (Windows Excel 預設) 轉為 UTF-8
-		// 這樣資料庫才看得懂中文
-		utf8Reader := transform.NewReader(f, traditionalchinese.Big5.NewDecoder())
-		
-		// 使用轉換過後的 reader 來讀取 CSV
-		r := csv.NewReader(utf8Reader)
-		// 允許欄位數量變動 (避免因為 Excel 多餘空格導致報錯)
-		r.FieldsPerRecord = -1 
-		records, err := r.ReadAll()
-		// --- 關鍵修正結束 ---
-
+		// 直接使用 CSV Reader (Go 預設支援 UTF-8)
+		reader := csv.NewReader(f)
+		reader.FieldsPerRecord = -1 // 允許欄位長度不一致
+		records, err := reader.ReadAll()
 		if err != nil {
-			c.String(400, "CSV 讀取失敗，請確認格式: "+err.Error())
+			c.String(400, "CSV 讀取失敗: "+err.Error())
 			return
 		}
-		
-		successCount := 0
-		for i, row := range records {
-			if i == 0 { continue } // 跳過標題
-			if len(row) < 3 { continue }
-			
-			// 解析分數 (處理可能的空白)
-			var score float64
-			_, err := fmt.Sscanf(strings.TrimSpace(row[1]), "%f", &score)
-			if err != nil { continue } // 分數格式不對就跳過
-			
-			// 建構資料物件
-			grade := models.Grade{
-				StudentID: strings.TrimSpace(row[0]),
-				Score:     score,
-				ItemName:  strings.TrimSpace(row[2]),
-			}
 
-			// Upsert: 衝突時更新
-			db.Clauses(clause.OnConflict{
-				Columns:   []clause.Column{{Name: "student_id"}, {Name: "item_name"}},
-				DoUpdates: clause.AssignmentColumns([]string{"score", "updated_at"}),
-			}).Create(&grade)
-			
-			successCount++
+		if len(records) < 2 {
+			c.String(400, "CSV 內容為空或無數據")
+			return
 		}
 
-		
+		// 1. 解析標題列，找出 "ID" 在第幾欄
+		header := records[0]
+		idIndex := -1
+		for i, colName := range header {
+			// 去除空格並忽略大小寫比較
+			if strings.EqualFold(strings.TrimSpace(colName), "ID") {
+				idIndex = i
+				break
+			}
+		}
 
-		// 重新導向回儀表板
+		if idIndex == -1 {
+			c.String(400, "❌ 找不到 'ID' 欄位，請檢查 CSV 標題")
+			return
+		}
+
+		// 定義要忽略的非成績欄位 (Metadata)
+		ignoreCols := map[string]bool{
+			"No.": true, "Class": true, "ID": true, "Grade": true,
+			"Total learning-progress points": true, "Weight of final exam (%)": true,
+		}
+
+		count := 0
+		// 2. 遍歷每一列數據
+		for i, row := range records {
+			if i == 0 { continue } // 跳過標題
+
+			// 取得學號
+			if len(row) <= idIndex { continue }
+			studentID := strings.TrimSpace(row[idIndex])
+			if studentID == "" { continue }
+
+			// 3. 遍歷該列的所有欄位 (把每個欄位都當作一個成績項目)
+			for colIdx, cellValue := range row {
+				colName := strings.TrimSpace(header[colIdx])
+
+				// 如果是基本資料欄位，就跳過
+				if ignoreCols[colName] {
+					continue
+				}
+
+				// 處理分數 (處理 "缺考", "NaN", 空白)
+				var score float64
+				cellValue = strings.TrimSpace(cellValue)
+				if cellValue == "" || strings.EqualFold(cellValue, "NaN") {
+					continue // 空值不匯入
+				}
+				
+				// 嘗試將文字轉為數字，失敗則預設為 0 (例如 '缺考')
+				if s, err := strconv.ParseFloat(cellValue, 64); err == nil {
+					score = s
+				} else {
+					score = 0
+				}
+
+				// 寫入資料庫
+				db.Clauses(clause.OnConflict{
+					Columns:   []clause.Column{{Name: "student_id"}, {Name: "item_name"}},
+					DoUpdates: clause.AssignmentColumns([]string{"score", "updated_at"}),
+				}).Create(&models.Grade{
+					StudentID: studentID,
+					ItemName:  colName, // 使用標題作為項目名稱 (如 "Midterm", "9/15")
+					Score:     score,
+				})
+				count++
+			}
+		}
+
 		c.Redirect(http.StatusSeeOther, "/teacher/dashboard")
 	})
 
-	// --- 新增：刪除成績路由 ---
 	teacher.POST("/delete/:id", func(c *gin.Context) {
 		id := c.Param("id")
-		
-		// 使用 GORM 的 Delete 方法，根據主鍵 ID 刪除
-		// Unscoped() 代表真的從資料庫移除 (Hard Delete)
-		// 如果不加 Unscoped()，預設是軟刪除 (Soft Delete，只標記 deleted_at 時間)
-		if err := db.Unscoped().Delete(&models.Grade{}, id).Error; err != nil {
-			c.String(500, "刪除失敗: "+err.Error())
-			return
-		}
-
-		// 刪除完成後，跳轉回儀表板
+		db.Unscoped().Delete(&models.Grade{}, id)
 		c.Redirect(http.StatusSeeOther, "/teacher/dashboard")
 	})
 
