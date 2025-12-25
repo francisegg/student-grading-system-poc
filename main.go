@@ -209,7 +209,7 @@ func main() {
 		})
 	})
 
-teacher.POST("/upload", func(c *gin.Context) {
+	teacher.POST("/upload", func(c *gin.Context) {
 		file, _ := c.FormFile("csv_file")
 		f, _ := file.Open()
 		defer f.Close() // 養成好習慣，記得關檔
@@ -257,7 +257,25 @@ teacher.POST("/upload", func(c *gin.Context) {
 			successCount++
 		}
 
+		
+
 		// 重新導向回儀表板
+		c.Redirect(http.StatusSeeOther, "/teacher/dashboard")
+	})
+	
+	// --- 新增：刪除成績路由 ---
+	teacher.POST("/delete/:id", func(c *gin.Context) {
+		id := c.Param("id")
+		
+		// 使用 GORM 的 Delete 方法，根據主鍵 ID 刪除
+		// Unscoped() 代表真的從資料庫移除 (Hard Delete)
+		// 如果不加 Unscoped()，預設是軟刪除 (Soft Delete，只標記 deleted_at 時間)
+		if err := db.Unscoped().Delete(&models.Grade{}, id).Error; err != nil {
+			c.String(500, "刪除失敗: "+err.Error())
+			return
+		}
+
+		// 刪除完成後，跳轉回儀表板
 		c.Redirect(http.StatusSeeOther, "/teacher/dashboard")
 	})
 

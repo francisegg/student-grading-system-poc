@@ -49,6 +49,7 @@
                         <th>項目 (Item)</th>
                         <th>分數 (Score)</th>
                         <th>上傳時間</th>
+                        <th style="width: 80px;">操作</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -58,10 +59,17 @@
                         <td>{{ .ItemName }}</td>
                         <td>{{ .Score }}</td>
                         <td>{{ .CreatedAt.Format "2006-01-02 15:04" }}</td>
+                        <td style="text-align: center;">
+                            <form action="/teacher/delete/{{.ID}}" method="POST" onsubmit="return confirm('⚠️ 確定要刪除這筆成績嗎？\n(學號: {{.StudentID}}, 項目: {{.ItemName}})');">
+                                <button type="submit" style="background-color: #ea4335; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;">
+                                    🗑️ 刪除
+                                </button>
+                            </form>
+                        </td>
                     </tr>
                     {{ else }}
                     <tr>
-                        <td colspan="4" style="text-align:center; color:#999;">目前沒有任何成績資料</td>
+                        <td colspan="5" style="text-align:center; color:#999;">目前沒有任何成績資料</td>
                     </tr>
                     {{ end }}
                 </tbody>
