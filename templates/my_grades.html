@@ -1,28 +1,154 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>我的成績</title>
+    <title>我的成績儀表板</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
-        th { background-color: #f2f2f2; }
+        body {
+            font-family: "Microsoft JhengHei", sans-serif;
+            background-color: #f4f6f9;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .btn {
+            text-decoration: none;
+            background: #6c757d;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 5px;
+            font-size: 0.9em;
+        }
+
+        /* 卡片設計 */
+        .card {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            padding: 25px;
+            margin-bottom: 25px;
+        }
+        
+        .card h3 { margin-top: 0; color: #333; }
+
+        /* 表格美化 */
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+        th { color: #666; font-weight: 600; }
+        tr:hover { background-color: #f9f9f9; }
+
+        /* 分數顏色判斷 */
+        .score-high { color: #28a745; font-weight: bold; }
+        .score-mid { color: #ffc107; font-weight: bold; }
+        .score-low { color: #dc3545; font-weight: bold; }
     </style>
 </head>
 <body>
-    <h1>📄 {{ .User.Name }} 的成績單</h1>
-    <a href="/">回首頁</a>
+
+<div class="container">
+    <div class="header">
+        <h1>🎓 {{ .User.Name }} 的成績單</h1>
+        <a href="/" class="btn">⬅ 回首頁</a>
+    </div>
+
+    <div class="card">
+        <h3>📈 成績趨勢圖</h3>
+        <canvas id="gradeChart" height="100"></canvas>
+    </div>
+
+    <div class="card">
+        <h3>📄 詳細數據</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>評量項目</th>
+                    <th>分數</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{ range .Grades }}
+                <tr>
+                    <td>{{ .ItemName }}</td>
+                    <td>
+                        {{ if ge .Score 90.0 }}
+                            <span class="score-high">{{ .Score }}</span>
+                        {{ else if lt .Score 60.0 }}
+                            <span class="score-low">{{ .Score }}</span>
+                        {{ else }}
+                            <span class="score-mid">{{ .Score }}</span>
+                        {{ end }}
+                    </td>
+                </tr>
+                {{ end }}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    // --- 這裡是關鍵：把 Go 的資料注入給 JavaScript ---
     
-    <table>
-        <tr>
-            <th>評量項目</th>
-            <th>分數</th>
-        </tr>
-        {{ range .Grades }}
-        <tr>
-            <td>{{ .ItemName }}</td>
-            <td>{{ .Score }}</td>
-        </tr>
-        {{ end }}
-    </table>
+    // 1. 準備 X 軸 (項目名稱)
+    const labels = [
+        {{ range .Grades }}"{{ .ItemName }}",{{ end }}
+    ];
+
+    // 2. 準備 Y 軸 (分數)
+    const dataPoints = [
+        {{ range .Grades }}{{ .Score }},{{ end }}
+    ];
+
+    // 3. 設定圖表
+    const ctx = document.getElementById('gradeChart').getContext('2d');
+    const myChart = new Chart(ctx, {
+        type: 'line', // 折線圖
+        data: {
+            labels: labels,
+            datasets: [{
+                label: '分數',
+                data: dataPoints,
+                borderColor: '#4285F4', // 線條顏色 (Google Blue)
+                backgroundColor: 'rgba(66, 133, 244, 0.1)', // 填充顏色
+                borderWidth: 2,
+                pointBackgroundColor: '#fff',
+                pointBorderColor: '#4285F4',
+                pointRadius: 5,
+                pointHoverRadius: 7,
+                fill: true, // 下方填充顏色
+                tension: 0.3 // 線條平滑度 (0為直線，越高越圓滑)
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100, // Y軸固定 0-100
+                    title: { display: true, text: '分數 (0-100)' }
+                },
+                x: {
+                    title: { display: true, text: '評量項目' }
+                }
+            },
+            plugins: {
+                legend: { display: false }, // 隱藏圖例
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                }
+            }
+        }
+    });
+</script>
+
 </body>
 </html>

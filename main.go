@@ -167,7 +167,7 @@ func main() {
 		c.Redirect(302, "/")
 	})
 
-	// --- 4. 學生查看成績 ---
+// --- 4. 學生查看成績 ---
 	r.GET("/my-grades", func(c *gin.Context) {
 		session := sessions.Default(c)
 		uid := session.Get("user_id")
@@ -177,7 +177,8 @@ func main() {
 		db.First(&s, uid)
 
 		var grades []models.Grade
-		db.Where("student_id = ?", s.StudentID).Find(&grades)
+		// 修改這裡：加上 Order("id asc") 確保圖表時間軸正確
+		db.Where("student_id = ?", s.StudentID).Order("id asc").Find(&grades)
 
 		c.HTML(200, "my_grades.html", gin.H{"User": s, "Grades": grades})
 	})
@@ -262,7 +263,7 @@ func main() {
 		// 重新導向回儀表板
 		c.Redirect(http.StatusSeeOther, "/teacher/dashboard")
 	})
-	
+
 	// --- 新增：刪除成績路由 ---
 	teacher.POST("/delete/:id", func(c *gin.Context) {
 		id := c.Param("id")
