@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>我的成績</title>
+    <style>
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <h1>📄 {{ .User.Name }} 的成績單</h1>
+    <a href="/">回首頁</a>
+    
+    <table>
+        <tr>
+            <th>評量項目</th>
+            <th>分數</th>
+        </tr>
+        {{ range .Grades }}
+        <tr>
+            <td>{{ .ItemName }}</td>
+            <td>{{ .Score }}</td>
+        </tr>
+        {{ end }}
+    </table>
+</body>
+</html>

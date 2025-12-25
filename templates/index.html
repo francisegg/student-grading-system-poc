@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>學生分數平台</title>
+    <style>
+        body { font-family: sans-serif; max-width: 800px; margin: 40px auto; text-align: center; }
+        .btn { padding: 10px 20px; background: #4285F4; color: white; text-decoration: none; border-radius: 5px; }
+        .teacher-btn { background: #ea4335; }
+    </style>
+</head>
+<body>
+    <h1>🎓 學生分數平台</h1>
+    <hr>
+    
+    {{ if .Logged }}
+        <h2>你好，{{ .User.Name }}</h2>
+        <p>Email: {{ .User.Email }}</p>
+        
+        <p><a href="/my-grades" class="btn">📄 查看我的成績單</a></p>
+
+        {{ if .IsTeacher }}
+            <br>
+            <p><a href="/teacher/dashboard" class="btn teacher-btn">👨‍🏫 老師管理後台</a></p>
+        {{ end }}
+
+        <br><br>
+        <a href="/logout">登出</a>
+    {{ else }}
+        <p>請登入以查看成績</p>
+        <a href="/login" class="btn">Google 登入</a>
+    {{ end }}
+</body>
+</html>

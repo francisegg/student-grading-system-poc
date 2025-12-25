@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>完成註冊</title>
+    <style>
+        body { font-family: sans-serif; max-width: 600px; margin: 40px auto; }
+        input, select { padding: 10px; width: 100%; margin: 10px 0; }
+        button { padding: 10px 20px; background: #34A853; color: white; border: none; width: 100%; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h2>📝 初次登入設定</h2>
+    <p>系統檢測到您尚未綁定學號，請完成以下資料。</p>
+    
+    <form action="/register" method="POST">
+        <label>Google Email:</label>
+        <input type="text" value="{{ .Email }}" disabled>
+        
+        <label>您的學號:</label>
+        <input type="text" name="student_id" required placeholder="例如：110123456">
+        
+        <label>修讀課程:</label>
+        <select name="course">
+            <option value="math_101">微積分 A 班</option>
+            <option value="eng_101">大一英文</option>
+        </select>
+        
+        <button type="submit">確認綁定</button>
+    </form>
+</body>
+</html>

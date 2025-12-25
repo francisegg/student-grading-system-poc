@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>老師管理後台</title>
+    <style>
+        body { font-family: "Microsoft JhengHei", sans-serif; max-width: 1000px; margin: 30px auto; padding: 20px; }
+        .container { display: flex; gap: 30px; }
+        .upload-box { flex: 1; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background: #f9f9f9; height: fit-content; }
+        .data-box { flex: 2; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #4285F4; color: white; }
+        tr:nth-child(even) { background-color: #f2f2f2; }
+
+        .btn { padding: 10px 15px; background: #4285F4; color: white; border: none; cursor: pointer; border-radius: 4px; }
+        .btn:hover { background: #3367D6; }
+        .home-link { text-decoration: none; color: #666; font-size: 0.9em; }
+    </style>
+</head>
+<body>
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h1>👨‍🏫 老師成績管理系統</h1>
+        <a href="/" class="home-link">⬅ 回首頁</a>
+    </div>
+    <hr>
+
+    <div class="container">
+        <div class="upload-box">
+            <h3>📂 批次匯入成績</h3>
+            <p>請上傳 CSV 檔案，格式如下：</p>
+            <pre style="background:#eee; padding:10px; border-radius:4px;">學號,分數,項目
+110001,85,期中考
+110002,90,期中考</pre>
+            
+            <form action="/teacher/upload" method="POST" enctype="multipart/form-data">
+                <input type="file" name="csv_file" accept=".csv" required style="margin: 10px 0;">
+                <br>
+                <button type="submit" class="btn">🚀 上傳並匯入</button>
+            </form>
+        </div>
+
+        <div class="data-box">
+            <h3>📊 目前系統內的成績列表</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>學號 (Student ID)</th>
+                        <th>項目 (Item)</th>
+                        <th>分數 (Score)</th>
+                        <th>上傳時間</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{ range .AllGrades }}
+                    <tr>
+                        <td>{{ .StudentID }}</td>
+                        <td>{{ .ItemName }}</td>
+                        <td>{{ .Score }}</td>
+                        <td>{{ .CreatedAt.Format "2006-01-02 15:04" }}</td>
+                    </tr>
+                    {{ else }}
+                    <tr>
+                        <td colspan="4" style="text-align:center; color:#999;">目前沒有任何成績資料</td>
+                    </tr>
+                    {{ end }}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+</html>

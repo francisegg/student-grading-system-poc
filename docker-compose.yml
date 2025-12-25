@@ -1,45 +1,30 @@
 version: '3.8'
 
 services:
-  # 應用程式容器 (Go)
-  app:
-    build: .
-    container_name: grade_app
-    restart: unless-stopped
-    ports:
-      - "8080:8080" # 映射到 VM 的 8080，配合 ZeroTier IP 存取
-    environment:
-      - DB_HOST=db
-      - DB_USER=${DB_USER}
-      - DB_PASSWORD=${DB_PASSWORD}
-      - DB_NAME=${DB_NAME}
-      - DB_PORT=5432
-      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-      - SESSION_SECRET=${SESSION_SECRET}
-    depends_on:
-      - db
-    networks:
-      - backend_net
-
-  # 資料庫容器 (PostgreSQL)
+  # 1. PostgreSQL 資料庫服務
   db:
     image: postgres:15-alpine
-    container_name: grade_db
-    restart: unless-stopped
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+    container_name: grades_db
+    restart: always
     environment:
-      - POSTGRES_USER=${DB_USER}
-      - POSTGRES_PASSWORD=${DB_PASSWORD}
-      - POSTGRES_DB=${DB_NAME}
-    # 注意：這裡不設定 ports，代表不對外暴露 5432 port，只允許 app 存取
-    networks:
-      - backend_net
+      POSTGRES_USER: myuser      # 帳號
+      POSTGRES_PASSWORD: mypassword  # 密碼 (開發用簡單就好)
+      POSTGRES_DB: grades_db     # 資料庫名稱
+    ports:
+      - "5432:5432" # 開放 5432 port 讓 Go 連線
+    volumes:
+      - postgres_data:/var/lib/postgresql/data # 讓資料持久化，重開機不會不見
 
-networks:
-  backend_net:
-    driver: bridge
+  # 2. pgAdmin (資料庫網頁管理介面)
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: grades_pgadmin
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80" # 我們把網頁開在 5050 port
 
 volumes:
   postgres_data:
