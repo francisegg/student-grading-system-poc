@@ -70,6 +70,7 @@ func main() {
 	store := cookie.NewStore([]byte(os.Getenv("SESSION_SECRET")))
 	r.Use(sessions.Sessions("mysession", store))
 	r.LoadHTMLGlob("templates/*")
+	r.Static("/static", "./static")
 
 	// --- 1. 首頁 ---
 	r.GET("/", func(c *gin.Context) {
