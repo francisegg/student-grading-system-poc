@@ -34,8 +34,10 @@ var (
 
 const TotalScoreColName = "Total learning-progress points"
 
+// 判斷是否為老師的輔助函式
 func isTeacher(email string) bool {
 	whitelist := os.Getenv("TEACHER_WHITELIST")
+	// 簡單判斷：只要白名單字串中包含該 Email 即視為老師
 	return strings.Contains(whitelist, email)
 }
 
@@ -56,10 +58,11 @@ func init() {
 	googleOauthConfig = &oauth2.Config{
 		ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
 		ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
-		RedirectURL:  "http://www.teaegg.space/auth/callback",
+		RedirectURL:  "http://www.teaegg.space/auth/callback", // 建議這裡也讀取環境變數，或保持你原本的 "http://www.teaegg.space/auth/callback"
 		Scopes:       []string{"https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"},
 		Endpoint:     google.Endpoint,
 	}
+	// 注意：若你的 RedirectURL 在 env 沒設定，請手動改回字串 "http://www.teaegg.space/auth/callback"
 }
 
 func main() {
@@ -87,10 +90,14 @@ func main() {
 		c.Redirect(http.StatusTemporaryRedirect, url)
 	})
 
+	// Google OAuth 回呼 (在這裡加入跳轉邏輯)
 	r.GET("/auth/callback", func(c *gin.Context) {
 		token, err := googleOauthConfig.Exchange(context.Background(), c.Query("code"))
-		if err != nil { c.Redirect(302, "/"); return }
-		
+		if err != nil {
+			c.Redirect(302, "/")
+			return
+		}
+
 		resp, _ := http.Get("https://www.googleapis.com/oauth2/v2/userinfo?access_token=" + token.AccessToken)
 		defer resp.Body.Close()
 		data, _ := ioutil.ReadAll(resp.Body)
@@ -101,7 +108,36 @@ func main() {
 		var s models.Student
 		result := db.Where("email = ?", gUser.Email).First(&s)
 		session := sessions.Default(c)
-		
+
+		if isTeacher(gUser.Email) {
+			var s models.Student
+			// 嘗試從資料庫找這個老師
+			res := db.Where("email = ?", gUser.Email).First(&s)
+			
+			// 如果老師還沒在資料庫裡，我們自動幫他建立一個帳號
+			if res.Error == gorm.ErrRecordNotFound {
+				s = models.Student{
+					Email:     gUser.Email,
+					Name:      gUser.Name,
+					// 為了避開 Unique Index 限制，自動產生一個特殊的 StudentID
+					StudentID: "TEACHER_" + gUser.Email, 
+					Course:    "TEACHER_ACCESS",
+				}
+				if err := db.Create(&s).Error; err != nil {
+					log.Println("建立老師帳號失敗:", err)
+					c.String(500, "建立老師帳號失敗")
+					return
+				}
+			}
+
+			// 設定 Session 並直接跳轉後台
+			session.Set("user_id", s.ID)
+			session.Save()
+			c.Redirect(http.StatusSeeOther, "/teacher/dashboard")
+			return
+		}
+
+		// 如果使用者不存在或沒綁定學號，導向註冊頁
 		if result.Error == gorm.ErrRecordNotFound || s.StudentID == "" {
 			session.Set("temp_email", gUser.Email)
 			session.Set("temp_name", gUser.Name)
@@ -110,8 +146,17 @@ func main() {
 			return
 		}
 
+		// 登入成功，設定 Session
 		session.Set("user_id", s.ID)
 		session.Save()
+
+		// [修改重點] 判斷是否為老師，如果是則直接跳轉到後台
+		if isTeacher(s.Email) {
+			c.Redirect(http.StatusSeeOther, "/teacher/dashboard")
+			return
+		}
+
+		// 一般學生跳轉回首頁
 		c.Redirect(http.StatusSeeOther, "/")
 	})
 
@@ -126,7 +171,10 @@ func main() {
 	r.GET("/register", func(c *gin.Context) {
 		session := sessions.Default(c)
 		email := session.Get("temp_email")
-		if email == nil { c.Redirect(302, "/"); return }
+		if email == nil {
+			c.Redirect(302, "/")
+			return
+		}
 		c.HTML(200, "register.html", gin.H{"Email": email})
 	})
 
@@ -134,7 +182,7 @@ func main() {
 		session := sessions.Default(c)
 		email := session.Get("temp_email")
 		name := session.Get("temp_name")
-		
+
 		var s models.Student
 		db.Where(models.Student{Email: email.(string)}).Attrs(models.Student{Name: name.(string)}).FirstOrCreate(&s)
 		s.StudentID = c.PostForm("student_id")
@@ -151,7 +199,10 @@ func main() {
 	r.GET("/my-grades", func(c *gin.Context) {
 		session := sessions.Default(c)
 		uid := session.Get("user_id")
-		if uid == nil { c.Redirect(302, "/"); return }
+		if uid == nil {
+			c.Redirect(302, "/")
+			return
+		}
 
 		var s models.Student
 		db.First(&s, uid)
@@ -192,39 +243,56 @@ func main() {
 		}
 
 		myTotal := myTotalGrade.Score
-		
+
 		// 計算基本統計
 		sum := 0.0
 		minScore, maxScore := 1000.0, -1.0
-		for _, t := range classTotals { 
+		for _, t := range classTotals {
 			sum += t
-			if t < minScore { minScore = t }
-			if t > maxScore { maxScore = t }
+			if t < minScore {
+				minScore = t
+			}
+			if t > maxScore {
+				maxScore = t
+			}
 		}
-		if len(classTotals) == 0 { minScore, maxScore = 0, 0 }
+		if len(classTotals) == 0 {
+			minScore, maxScore = 0, 0
+		}
 
 		mean := 0.0
-		if len(classTotals) > 0 { mean = sum / float64(len(classTotals)) }
+		if len(classTotals) > 0 {
+			mean = sum / float64(len(classTotals))
+		}
 
 		varianceSum := 0.0
-		for _, t := range classTotals { varianceSum += math.Pow(t-mean, 2) }
+		for _, t := range classTotals {
+			varianceSum += math.Pow(t-mean, 2)
+		}
 		stdDev := 0.0
-		if len(classTotals) > 0 { stdDev = math.Sqrt(varianceSum / float64(len(classTotals))) }
+		if len(classTotals) > 0 {
+			stdDev = math.Sqrt(varianceSum / float64(len(classTotals)))
+		}
 
 		// 計算 PR
 		sort.Float64s(classTotals) // 這一步排序很重要 (由小到大)
 		rank := 0
 		for i, t := range classTotals {
-			if t >= myTotal { rank = i; break }
+			if t >= myTotal {
+				rank = i
+				break
+			}
 			rank = i + 1
 		}
 		percentile := 0.0
 		if len(classTotals) > 1 {
 			percentile = (float64(rank) / float64(len(classTotals))) * 100
-		} else if len(classTotals) == 1 { percentile = 100 }
+		} else if len(classTotals) == 1 {
+			percentile = 100
+		}
 
 		// --- 新增功能區 Start ---
-		
+
 		// 1. 取出前三名 (classTotals 已經是由小到大排序)
 		var top3 []float64
 		count := len(classTotals)
@@ -235,7 +303,9 @@ func main() {
 
 		// 2. 計算期末佔比 (100 - 目前總分)
 		finalWeight := 100.0 - myTotal
-		if finalWeight < 0 { finalWeight = 0 } // 防止超過100變負數
+		if finalWeight < 0 {
+			finalWeight = 0
+		} // 防止超過100變負數
 
 		// --- 新增功能區 End ---
 
@@ -259,6 +329,7 @@ func main() {
 		session := sessions.Default(c)
 		uid := session.Get("user_id")
 		var s models.Student
+		// 這裡也會再次檢查 isTeacher，確保安全性
 		if uid == nil || db.First(&s, uid).Error != nil || !isTeacher(s.Email) {
 			c.String(403, "🚫 權限不足")
 			c.Abort()
@@ -281,8 +352,14 @@ func main() {
 		reader := csv.NewReader(f)
 		reader.FieldsPerRecord = -1
 		records, err := reader.ReadAll()
-		if err != nil { c.String(400, "CSV 讀取失敗"); return }
-		if len(records) < 2 { c.String(400, "無數據"); return }
+		if err != nil {
+			c.String(400, "CSV 讀取失敗")
+			return
+		}
+		if len(records) < 2 {
+			c.String(400, "無數據")
+			return
+		}
 
 		header := records[0]
 		idIndex := -1
@@ -292,7 +369,10 @@ func main() {
 				break
 			}
 		}
-		if idIndex == -1 { c.String(400, "❌ 找不到 'ID' 欄位"); return }
+		if idIndex == -1 {
+			c.String(400, "❌ 找不到 'ID' 欄位")
+			return
+		}
 
 		// 忽略欄位清單 (Total learning-progress points 需允許寫入)
 		ignoreCols := map[string]bool{
@@ -301,22 +381,34 @@ func main() {
 		}
 
 		for i, row := range records {
-			if i == 0 { continue }
-			if len(row) <= idIndex { continue }
+			if i == 0 {
+				continue
+			}
+			if len(row) <= idIndex {
+				continue
+			}
 			studentID := strings.TrimSpace(row[idIndex])
-			if studentID == "" { continue }
+			if studentID == "" {
+				continue
+			}
 
 			for colIdx, cellValue := range row {
 				colName := strings.TrimSpace(header[colIdx])
-				if ignoreCols[colName] { continue }
+				if ignoreCols[colName] {
+					continue
+				}
 
 				var score float64
 				cellValue = strings.TrimSpace(cellValue)
-				if cellValue == "" || strings.EqualFold(cellValue, "NaN") { continue }
-				
+				if cellValue == "" || strings.EqualFold(cellValue, "NaN") {
+					continue
+				}
+
 				if s, err := strconv.ParseFloat(cellValue, 64); err == nil {
 					score = s
-				} else { score = 0 }
+				} else {
+					score = 0
+				}
 
 				db.Clauses(clause.OnConflict{
 					Columns:   []clause.Column{{Name: "student_id"}, {Name: "item_name"}},
