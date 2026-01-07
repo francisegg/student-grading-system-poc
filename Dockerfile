@@ -25,6 +25,7 @@ WORKDIR /root/
 COPY --from=builder /app/server .
 COPY --from=builder /app/templates ./templates
 COPY --from=builder /app/.env . 
+COPY --from=builder /app/static ./static
 
 # 安裝必要的憑證庫 (讓 Go 可以發送 HTTPS 請求給 Google OAuth)
 RUN apk add --no-cache ca-certificates tzdata
