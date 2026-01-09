@@ -429,6 +429,20 @@ func main() {
 		db.Unscoped().Delete(&models.Grade{}, id)
 		c.Redirect(http.StatusSeeOther, "/teacher/dashboard")
 	})
+	
+	teacher.POST("/delete-all", func(c *gin.Context) {
+		// 使用 Unscoped 硬刪除，確保資料庫真的清空，
+		// 避免 Unique Index (idx_student_item) 導致無法重新上傳相同的 (學號+項目)。
+		// AllowGlobalUpdate: true 是必須的，否則 GORM 會防止全表刪除操作。
+		err := db.Unscoped().Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&models.Grade{}).Error
+		if err != nil {
+			log.Println("清空資料庫失敗:", err)
+			c.String(500, "❌ 清空失敗，請檢查後端 Log")
+			return
+		}
+		// 刪除後導回儀表板
+		c.Redirect(http.StatusSeeOther, "/teacher/dashboard")
+	})
 
 	r.Run(":8080")
 }

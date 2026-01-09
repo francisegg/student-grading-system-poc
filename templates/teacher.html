@@ -40,6 +40,22 @@
                 <br>
                 <button type="submit" class="btn">🚀 上傳並匯入</button>
             </form>
+            
+            </form>
+            
+            <hr style="margin: 25px 0; border: 0; border-top: 1px dashed #ccc;">
+            
+            <div style="background-color: #fff5f5; border: 1px solid #fc8181; padding: 15px; border-radius: 6px;">
+                <h4 style="margin-top: 0; color: #c53030;">⚠️ 開發測試區</h4>
+                <p style="font-size: 0.9em; color: #742a2a; margin-bottom: 10px;">
+                    此按鈕將<b>永久刪除</b>所有學生成績資料，用於 Demo 重置環境。
+                </p>
+                <form action="/teacher/delete-all" method="POST" onsubmit="return confirm('🧨 嚴重警告：\n\n確定要「清空所有資料庫」嗎？\n\n此動作無法復原！所有學生的成績都會消失！');">
+                    <button type="submit" class="btn" style="background-color: #c53030; width: 100%;">
+                        💣 一鍵清空所有資料
+                    </button>
+                </form>
+            </div>
         </div>
 
         <div class="data-box">
