@@ -6,39 +6,156 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { font-family: "Microsoft JhengHei", sans-serif; background-color: #f0f2f5; margin: 0; padding: 0; display: flex; flex-direction: column; min-height: 100vh; }
+        body { 
+            font-family: "Microsoft JhengHei", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f0f2f5; 
+            margin: 0; 
+            padding: 0; 
+            display: flex; 
+            flex-direction: column; 
+            min-height: 100vh; 
+        }
         
         /* 頂部導覽列 */
-        .navbar { background-color: #ffffff; padding: 15px 30px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; }
-        .brand { font-size: 1.2rem; font-weight: bold; color: #1a73e8; text-decoration: none; display: flex; align-items: center; gap: 10px; }
-        .user-info { display: flex; align-items: center; gap: 15px; font-size: 0.9rem; color: #5f6368; }
-        .btn-logout { background-color: #f1f3f4; color: #3c4043; padding: 8px 16px; border-radius: 4px; text-decoration: none; transition: 0.2s; }
+        .navbar { 
+            background-color: #ffffff; 
+            padding: 15px 30px; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05); 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+        }
+        .brand { 
+            font-size: 1.2rem; 
+            font-weight: bold; 
+            color: #1a73e8; 
+            text-decoration: none; 
+            display: flex; 
+            align-items: center; 
+            gap: 10px; 
+        }
+        .user-info { 
+            display: flex; 
+            align-items: center; 
+            gap: 15px; 
+            font-size: 0.9rem; 
+            color: #5f6368; 
+        }
+        .btn-logout { 
+            background-color: #f1f3f4; 
+            color: #3c4043; 
+            padding: 8px 16px; 
+            border-radius: 4px; 
+            text-decoration: none; 
+            transition: 0.2s; 
+        }
         .btn-logout:hover { background-color: #e8eaed; }
 
         /* 主要內容區 */
-        .container { max-width: 1000px; margin: 40px auto; padding: 0 20px; text-align: center; }
+        .container { 
+            max-width: 900px; /* 限制最大寬度，讓卡片集中 */
+            margin: 40px auto; 
+            padding: 0 20px; 
+            text-align: center; 
+            flex: 1;
+        }
+        
         .hero-text { margin-bottom: 40px; }
         .hero-text h1 { font-size: 2rem; color: #202124; margin-bottom: 10px; }
         .hero-text p { color: #5f6368; }
 
-        /* 卡片網格 */
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 25px; }
+        /* --- 關鍵修改：方格佈局 CSS --- */
+        .grid { 
+            display: grid; 
+            /* 自動填滿：每格至少 220px 寬，空間夠就會並排 (變 2 欄、3 欄)
+               這樣在大螢幕就像「四方格」，手機上會自動變成直排
+            */
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); 
+            gap: 25px; 
+            justify-content: center;
+        }
         
-        /* 科目卡片 */
-        .card { background: white; border-radius: 12px; padding: 30px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); text-decoration: none; color: inherit; transition: transform 0.2s, box-shadow 0.2s; border: 1px solid #e0e0e0; display: flex; flex-direction: column; align-items: center; }
-        .card:hover { transform: translateY(-5px); box-shadow: 0 10px 15px rgba(0,0,0,0.1); border-color: #1a73e8; }
-        
-        .icon-box { width: 60px; height: 60px; background-color: #e8f0fe; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 15px; font-size: 1.5rem; }
-        .card h2 { margin: 0 0 10px 0; font-size: 1.3rem; color: #202124; }
-        .card p { margin: 0; color: #5f6368; font-size: 0.9rem; }
-        .arrow { margin-top: 20px; color: #1a73e8; font-weight: bold; opacity: 0; transition: 0.2s; }
-        .card:hover .arrow { opacity: 1; transform: translateX(5px); }
+        /* 卡片樣式 */
+        .card { 
+            background: white; 
+            border-radius: 16px; 
+            padding: 30px; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05); 
+            text-decoration: none; 
+            color: inherit; 
+            transition: all 0.3s ease; 
+            border: 1px solid #e0e0e0; 
+            
+            /* 讓卡片內容垂直置中 */
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center;
+            
+            /* 讓卡片接近正方形 */
+            aspect-ratio: 1 / 1; 
+            min-height: 240px;
+        }
 
-        /* 前台連結卡片 */
-        .card.student-view { background: linear-gradient(135deg, #1a73e8 0%, #0d47a1 100%); color: white; border: none; }
-        .card.student-view .icon-box { background-color: rgba(255,255,255,0.2); color: white; }
-        .card.student-view h2, .card.student-view p { color: white; }
-        .card.student-view:hover { border-color: transparent; }
+        .card:hover { 
+            transform: translateY(-8px); /* 懸浮上移效果 */
+            box-shadow: 0 15px 30px rgba(0,0,0,0.1); 
+            border-color: #1a73e8; 
+        }
+        
+        .icon-box { 
+            width: 70px; 
+            height: 70px; 
+            background-color: #e8f0fe; 
+            border-radius: 50%; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            margin-bottom: 20px; 
+            font-size: 2rem; 
+            transition: 0.3s;
+        }
+
+        .card:hover .icon-box {
+            background-color: #1a73e8;
+            color: white;
+            transform: scale(1.1);
+        }
+
+        .card h2 { margin: 0 0 10px 0; font-size: 1.4rem; color: #202124; }
+        .card p { margin: 0; color: #5f6368; font-size: 0.95rem; }
+        
+        .arrow { 
+            margin-top: 20px; 
+            color: #1a73e8; 
+            font-weight: bold; 
+            opacity: 0; 
+            transform: translateY(10px);
+            transition: 0.3s; 
+        }
+        
+        .card:hover .arrow { 
+            opacity: 1; 
+            transform: translateY(0); 
+        }
+
+        /* 學生前台連結卡片 (不同顏色區分) */
+        .card.student-view { 
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border: 1px dashed #ced4da;
+        }
+        .card.student-view:hover {
+            background: #fff;
+            border-color: #34A853;
+        }
+        .card.student-view .icon-box {
+            background-color: #e6f4ea;
+            color: #34A853;
+        }
+        .card.student-view:hover .icon-box {
+            background-color: #34A853;
+            color: white;
+        }
     </style>
 </head>
 <body>
@@ -55,8 +172,8 @@
 
     <div class="container">
         <div class="hero-text">
-            <h1>👋 歡迎回來，陳老師</h1>
-            <p>請選擇您要管理的課程科目</p>
+            <h1>👋 歡迎回來，老師</h1>
+            <p>請點擊下方卡片，進入各科目的成績管理系統</p>
         </div>
 
         <div class="grid">
@@ -64,21 +181,23 @@
             <a href="/teacher/dashboard?subject={{ . }}" class="card">
                 <div class="icon-box">📚</div>
                 <h2>{{ . }}</h2>
-                <p>點擊進入成績管理</p>
-                <span class="arrow">進入管理 ➜</span>
+                <p>進入成績管理面板</p>
+                <span class="arrow">Manage ➜</span>
             </a>
             {{ end }}
 
             <a href="https://circuit.teaegg.space" target="_blank" class="card student-view">
                 <div class="icon-box">🔗</div>
-                <h2>前往學生前台</h2>
-                <p>檢視電路學 (Circuit) 網站</p>
+                <h2>電路學前台</h2>
+                <p>檢視學生看到的畫面</p>
+                <span class="arrow" style="color:#34A853">Go to Site ➜</span>
             </a>
             
              <a href="https://antenna.teaegg.space" target="_blank" class="card student-view">
                 <div class="icon-box">🔗</div>
-                <h2>前往學生前台</h2>
-                <p>檢視天線工程 (Antenna) 網站</p>
+                <h2>天線工程前台</h2>
+                <p>檢視學生看到的畫面</p>
+                <span class="arrow" style="color:#34A853">Go to Site ➜</span>
             </a>
         </div>
     </div>
