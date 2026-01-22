@@ -1,64 +1,79 @@
-# version: '3.8'
-
-# services:
-#   # 1. PostgreSQL 資料庫服務
-#   db:
-#     image: postgres:15-alpine
-#     container_name: grades_db
-#     restart: always
-#     environment:
-#       POSTGRES_USER: myuser      # 帳號
-#       POSTGRES_PASSWORD: mypassword  # 密碼 (開發用簡單就好)
-#       POSTGRES_DB: grades_db     # 資料庫名稱
-#     ports:
-#       - "5432:5432" # 開放 5432 port 讓 Go 連線
-#     volumes:
-#       - postgres_data:/var/lib/postgresql/data # 讓資料持久化，重開機不會不見
-
-#   # 2. pgAdmin (資料庫網頁管理介面)
-#   pgadmin:
-#     image: dpage/pgadmin4
-#     container_name: grades_pgadmin
-#     restart: always
-#     environment:
-#       PGADMIN_DEFAULT_EMAIL: admin@admin.com
-#       PGADMIN_DEFAULT_PASSWORD: admin
-#     ports:
-#       - "5050:80" # 我們把網頁開在 5050 port
-
-# volumes:
-#   postgres_data:
-
+version: '3.8'
 
 services:
-  app:
-    env_file:
-      - .env
-    build: .
-    container_name: grade_system_app
-    restart: always
-    ports:
-      - "127.0.0.1:8080:8080" # 關鍵：只綁定在 localhost，外網無法直接連 8080
-    depends_on:
-      - db
-    environment:
-      - DB_HOST=db       # 對應下方的 service name
-      - DB_USER=myuser
-      - DB_PASSWORD=mypassword
-      - DB_NAME=grades_db
-      - DB_PORT=5432
-
+  # ==========================================
+  # 🟢 唯一的資料庫 (省空間！)
+  # ==========================================
   db:
     image: postgres:15-alpine
-    container_name: grades_db
+    container_name: shared_db
     restart: always
     environment:
       POSTGRES_USER: myuser
       POSTGRES_PASSWORD: mypassword
-      POSTGRES_DB: grades_db
-    # 移除 ports 區塊，或者改成 "127.0.0.1:5432:5432" 以防外網直接連線資料庫
+      POSTGRES_DB: shared_grades_db
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - shared_pg_data:/var/lib/postgresql/data
+
+  # ==========================================
+  # 🔵 課程 1：電路學 (學生入口)
+  # ==========================================
+  circuit:
+    build: .
+    container_name: app_circuit
+    restart: always
+    ports:
+      - "127.0.0.1:8081:8080"
+    environment:
+      - DB_HOST=db
+      - DB_NAME=shared_grades_db
+      - APP_NAME=電路學成績網
+      - APP_SUBJECT=circuit  # ★ 關鍵：指定科目
+      - TEACHER_WHITELIST=huangky.tw@gmail.com
+      # Google OAuth 設定 (Callback 指向 circuit.teaegg.space)
+      - GOOGLE_REDIRECT_URL=https://circuit.teaegg.space/auth/callback
+    depends_on:
+      - db
+
+  # ==========================================
+  # 🟣 課程 2：天線工程 (學生入口)
+  # ==========================================
+  antenna:
+    build: .
+    container_name: app_antenna
+    restart: always
+    ports:
+      - "127.0.0.1:8082:8080"
+    environment:
+      - DB_HOST=db
+      - DB_NAME=shared_grades_db
+      - APP_NAME=天線工程成績網
+      - APP_SUBJECT=antenna # ★ 關鍵：指定科目
+      - TEACHER_WHITELIST=huangky.tw@gmail.com
+      # Google OAuth 設定 (Callback 指向 antenna.teaegg.space)
+      - GOOGLE_REDIRECT_URL=https://antenna.teaegg.space/auth/callback
+    depends_on:
+      - db
+
+  # ==========================================
+  # 🔴 老師總後台 (獨立入口)
+  # ==========================================
+  admin-portal:
+    build: .
+    container_name: app_admin
+    restart: always
+    ports:
+      - "127.0.0.1:8090:8080"
+    environment:
+      - DB_HOST=db
+      - DB_NAME=shared_grades_db
+      - APP_MODE=admin      # ★ 關鍵：管理員模式
+      - APP_NAME=教師總管理後台
+      - TEACHER_WHITELIST=huangky.tw@gmail.com
+      # Google OAuth 設定 (Callback 指向 admin.teaegg.space)
+      - GOOGLE_REDIRECT_URL=https://admin.teaegg.space/auth/callback
+    depends_on:
+      - db
 
 volumes:
-  postgres_data:
+  shared_pg_data:

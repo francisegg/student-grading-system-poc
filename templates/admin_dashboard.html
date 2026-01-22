@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>教師總管理後台</title>
+    </head>
+<body>
+    <h1>👨‍🏫 課程管理入口</h1>
+    <p>請選擇您要管理的科目：</p>
+    
+    <div class="grid">
+        {{ range .Subjects }}
+        <a href="/teacher/dashboard?subject={{ . }}" class="card">
+            <h2>📚 {{ . }}</h2>
+            <p>點擊進入管理</p>
+        </a>
+        {{ end }}
+        
+        <a href="https://circuit.teaegg.space" target="_blank" class="card student-view">
+            前往電路學前台 ➜
+        </a>
+    </div>
+</body>
+</html>
