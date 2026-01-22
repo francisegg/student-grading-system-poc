@@ -78,14 +78,14 @@ func init() {
 		log.Fatal("資料庫連線失敗: ", err)
 	}
 	
-	// 自動遷移 Schema (請確保 models/schema.go 已經加上 Subject 欄位)
-	db.AutoMigrate(&models.Student{}, &models.Grade{})
+// 自動遷移 Schema (加入 Roster)
+	db.AutoMigrate(&models.Student{}, &models.Grade{}, &models.Roster{})
 
 	// 3. Google OAuth 設定
 	googleOauthConfig = &oauth2.Config{
 		ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
 		ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
-		RedirectURL:  os.Getenv("GOOGLE_REDIRECT_URL"), // 從 .env 讀取，因為不同子網域不同
+		RedirectURL:  os.Getenv("GOOGLE_REDIRECT_URL"),
 		Scopes:       []string{"https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"},
 		Endpoint:     google.Endpoint,
 	}
@@ -94,15 +94,13 @@ func init() {
 func main() {
 	r := gin.Default()
 	store := cookie.NewStore([]byte(os.Getenv("SESSION_SECRET")))
-	// 設定 Cookie Domain 讓子網域可以共用 (如果需要)
-	// store.Options(sessions.Options{Path: "/", Domain: ".teaegg.space", MaxAge: 86400 * 7, HttpOnly: true, Secure: true})
 	r.Use(sessions.Sessions("mysession", store))
 	r.LoadHTMLGlob("templates/*")
 
 	// --- 1. 首頁 (分流邏輯) ---
 	r.GET("/", func(c *gin.Context) {
 		session := sessions.Default(c)
-		uid := session.Get("user_id")
+		uid := session.Get("user_id") // ★ 這一行非常重要
 
 		// 【情境 A：管理員模式】
 		if IsAdminMode {
@@ -112,12 +110,32 @@ func main() {
 				return
 			}
 			// 已登入 -> 顯示科目選擇頁 (Admin Dashboard)
-			// 找出目前資料庫裡所有不重複的科目
 			var subjects []string
+			// 1. 先嘗試從資料庫找出有成績的科目
 			db.Model(&models.Grade{}).Distinct("subject").Pluck("subject", &subjects)
+
+			// 2. 手動補上預設科目
+			knownSubjects := []string{"circuit", "antenna"}
+			
+			// 去重複合併
+			subjectMap := make(map[string]bool)
+			for _, s := range subjects { subjectMap[s] = true }
+			for _, s := range knownSubjects { subjectMap[s] = true }
+			
+			var finalSubjects []string
+			for s := range subjectMap { finalSubjects = append(finalSubjects, s) }
+			sort.Strings(finalSubjects)
+
+			// 取得使用者 Email
+			userEmail := ""
+			if uStr, ok := uid.(string); ok {
+				userEmail = strings.TrimPrefix(uStr, "ADMIN_")
+			}
+
 			c.HTML(http.StatusOK, "admin_dashboard.html", gin.H{
-				"Subjects": subjects,
+				"Subjects": finalSubjects,
 				"AppName":  AppName,
+				"UserEmail": userEmail, 
 			})
 			return
 		}
@@ -129,11 +147,9 @@ func main() {
 		}
 
 		var s models.Student
-		// 使用 filterSubject 自動加上 WHERE subject = ...
 		result := db.Scopes(filterSubject).First(&s, uid)
 		
 		if result.Error != nil {
-			// 找不到學生資料 -> 可能是新註冊，或是跑錯科目
 			c.Redirect(http.StatusSeeOther, "/logout")
 			return
 		}
@@ -167,22 +183,25 @@ func main() {
 		json.Unmarshal(data, &gUser)
 		session := sessions.Default(c)
 
-		// 【情境 A：管理員模式登入】
+		// 【修正：情境 A：管理員模式登入】
 		if IsAdminMode {
+			// 1. 檢查是否為老師
 			if !isTeacher(gUser.Email) {
 				c.String(403, "🚫 抱歉，只有老師可以登入此後台。")
 				return
 			}
-			// 老師登入成功
-			session.Set("user_id", "ADMIN_"+gUser.Email) // 特殊 ID 標記
+			// 2. 老師登入成功，設定 Session
+			session.Set("user_id", "ADMIN_"+gUser.Email)
 			session.Save()
-			c.Redirect(http.StatusSeeOther, "/") // 回到首頁 (Admin Dashboard)
+			
+			// 3. 導回首頁 (由首頁負責顯示 Dashboard)
+			c.Redirect(http.StatusSeeOther, "/")
 			return
 		}
 
 		// 【情境 B：學生模式登入】
 		var s models.Student
-		// 查詢時加上科目過濾，確保學生是在「當前科目」有註冊
+		// 查詢時加上科目過濾
 		result := db.Scopes(filterSubject).Where("email = ?", gUser.Email).First(&s)
 
 		if result.Error == gorm.ErrRecordNotFound || s.StudentID == "" {
@@ -209,34 +228,58 @@ func main() {
 
 	// --- 3. 註冊 (學生模式專用) ---
 	r.GET("/register", func(c *gin.Context) {
-		if IsAdminMode { c.Redirect(302, "/"); return } // 後台不需要註冊
+		if IsAdminMode { c.Redirect(302, "/"); return }
 		session := sessions.Default(c)
 		email := session.Get("temp_email")
 		if email == nil { c.Redirect(302, "/"); return }
 		c.HTML(200, "register.html", gin.H{"Email": email})
 	})
 
-	r.POST("/register", func(c *gin.Context) {
+r.POST("/register", func(c *gin.Context) {
 		session := sessions.Default(c)
 		email := session.Get("temp_email")
-		name := session.Get("temp_name")
+		// Google 名字我們備用，但優先使用名單上的名字
+		// googleName := session.Get("temp_name") 
 
 		if email == nil { c.Redirect(302, "/"); return }
+		userEmail := email.(string)
 
-		var s models.Student
-		// 在建立時，一定要寫入當前科目 (CurrentSubject)
-		db.Scopes(filterSubject).Where(models.Student{Email: email.(string)}).Attrs(models.Student{
-			Name:    name.(string),
-			Subject: CurrentSubject, // ★ 關鍵：寫入科目
-		}).FirstOrCreate(&s)
+		inputID := strings.TrimSpace(c.PostForm("student_id"))
 
-		s.StudentID = c.PostForm("student_id")
-		s.Course = c.PostForm("course")
-		s.Subject = CurrentSubject // 確保更新
-		db.Save(&s)
+		// 1. 檢查名單 (Roster) 是否有這個學號
+		var roster models.Roster
+		if err := db.Where("student_id = ? AND subject = ?", inputID, CurrentSubject).First(&roster).Error; err != nil {
+			// 找不到學號 -> 錯誤提示 (這裡簡單處理，您可以做成漂亮的錯誤頁面)
+			c.String(400, "❌ 驗證失敗：此學號不在老師的修課名單中，請檢查輸入或聯繫助教。")
+			return
+		}
 
-		session.Set("user_id", s.ID)
+		// 2. 檢查該學號是否已經被其他人綁定
+		var existStudent models.Student
+		if err := db.Scopes(filterSubject).Where("student_id = ?", inputID).First(&existStudent).Error; err == nil {
+			c.String(400, "❌ 綁定失敗：此學號已經被註冊過了！")
+			return
+		}
+
+		// 3. 通過驗證 -> 建立學生帳號 (綁定 Email)
+		// 這裡我們使用 Roster 裡面的 Name 和 Course，確保資料正確
+		newStudent := models.Student{
+			Email:     userEmail,
+			Name:      roster.Name,    // ★ 使用名單上的真實姓名
+			StudentID: roster.StudentID,
+			Course:    roster.Course,  // ★ 自動帶入班級
+			Subject:   CurrentSubject,
+		}
+		
+		if err := db.Create(&newStudent).Error; err != nil {
+			c.String(500, "資料庫寫入失敗")
+			return
+		}
+
+		// 4. 註冊成功，寫入 Session 並登入
+		session.Set("user_id", newStudent.ID)
 		session.Delete("temp_email")
+		session.Delete("temp_name")
 		session.Save()
 		c.Redirect(302, "/")
 	})
@@ -252,39 +295,30 @@ func main() {
 		var s models.Student
 		db.Scopes(filterSubject).First(&s, uid)
 
-		// A. 顯示用的詳細成績 (只抓該科目)
+		// 成績查詢邏輯...
 		var displayGrades []models.Grade
 		db.Scopes(filterSubject).Where("student_id = ? AND item_name != ?", s.StudentID, TotalScoreColName).Order("id asc").Find(&displayGrades)
 
-		// B. 統計用的數據 (需手動 Join 並過濾 Subject 和 Course)
 		var myTotalGrade models.Grade
 		var classTotals []float64
 
-		// 這裡要很小心：計算排名時，必須鎖定「同科目」且「同班級」
 		type Result struct {
 			StudentID string
 			Score     float64
 		}
 		var results []Result
 
-		// 1. 先嘗試抓取 Total learning-progress points
 		query := db.Table("grades").
 			Select("grades.student_id, grades.score").
 			Joins("JOIN students ON students.student_id = grades.student_id").
 			Where("grades.item_name = ?", TotalScoreColName).
-			Where("grades.subject = ?", CurrentSubject).    // ★ 科目過濾
-			Where("students.subject = ?", CurrentSubject).  // ★ 科目過濾
-			Where("students.course = ?", s.Course)          // ★ 班級過濾
+			Where("grades.subject = ?", CurrentSubject).
+			Where("students.subject = ?", CurrentSubject).
+			Where("students.course = ?", s.Course)
 
 		query.Scan(&results)
 
-		// 如果沒有預先計算好的總分，就自己加總
 		if len(results) == 0 {
-			// 撈出該班級、該科目的所有成績細項來加總
-			type SumResult struct {
-				StudentID string
-				Total     float64
-			}
 			db.Table("grades").
 				Select("grades.student_id, SUM(grades.score) as total").
 				Joins("JOIN students ON students.student_id = grades.student_id").
@@ -292,7 +326,7 @@ func main() {
 				Where("students.subject = ?", CurrentSubject).
 				Where("students.course = ?", s.Course).
 				Group("grades.student_id").
-				Scan(&results) // 這裡結構會自動對應到 Result 的 Score (Total)
+				Scan(&results)
 		}
 
 		for _, r := range results {
@@ -301,10 +335,9 @@ func main() {
 				myTotalGrade.Score = r.Score
 			}
 		}
-
 		myTotal := myTotalGrade.Score
 
-		// 計算統計數據 (平均、標準差、PR)
+		// 統計計算
 		sum := 0.0
 		minScore, maxScore := 1000.0, -1.0
 		for _, t := range classTotals {
@@ -359,7 +392,6 @@ func main() {
 
 	// --- 5. 老師後台功能 ---
 	teacher := r.Group("/teacher")
-	// Middleware: 檢查權限
 	teacher.Use(func(c *gin.Context) {
 		session := sessions.Default(c)
 		uid := session.Get("user_id")
@@ -368,10 +400,7 @@ func main() {
 			c.Abort()
 			return
 		}
-		// 如果是 Admin 模式，Session ID 會是 "ADMIN_..."
 		isAdminSession := strings.HasPrefix(fmt.Sprintf("%v", uid), "ADMIN_")
-		
-		// 如果不是 Admin 模式，就檢查資料庫裡的學生是否為老師
 		if !isAdminSession {
 			var s models.Student
 			if err := db.Scopes(filterSubject).First(&s, uid).Error; err != nil || !isTeacher(s.Email) {
@@ -384,35 +413,30 @@ func main() {
 	})
 
 	teacher.GET("/dashboard", func(c *gin.Context) {
-		// 決定現在要看哪個科目
 		targetSubject := CurrentSubject
-		
-		// 如果是管理員模式，從網址參數讀取科目 (例如 ?subject=circuit)
 		if IsAdminMode {
 			targetSubject = c.Query("subject")
 			if targetSubject == "" {
-				c.Redirect(302, "/") // 沒選科目就回首頁選
+				c.Redirect(302, "/")
 				return
 			}
 		}
 
 		var allGrades []models.Grade
-		// 查詢該科目的所有成績
 		db.Where("subject = ?", targetSubject).Order("created_at desc").Find(&allGrades)
 
 		c.HTML(200, "teacher.html", gin.H{
 			"AllGrades": allGrades,
-			"Subject":   targetSubject, // 傳給前端，讓上傳表單知道要傳給誰
+			"Subject":   targetSubject,
 			"AppName":   AppName,
 			"IsAdmin":   IsAdminMode,
 		})
 	})
 
 	teacher.POST("/upload", func(c *gin.Context) {
-		// 決定寫入哪個科目
 		targetSubject := CurrentSubject
 		if IsAdminMode {
-			targetSubject = c.PostForm("subject") // 從 hidden input 讀取
+			targetSubject = c.PostForm("subject")
 		}
 
 		file, _ := c.FormFile("csv_file")
@@ -454,21 +478,93 @@ func main() {
 					score = s
 				} else { score = 0 }
 
-				// 寫入 DB (包含 Subject)
 				db.Clauses(clause.OnConflict{
-					// 衝突判斷：學號 + 項目 + 科目 必須唯一
 					Columns:   []clause.Column{{Name: "student_id"}, {Name: "item_name"}, {Name: "subject"}},
 					DoUpdates: clause.AssignmentColumns([]string{"score", "updated_at"}),
 				}).Create(&models.Grade{
 					StudentID: studentID,
 					ItemName:  colName,
 					Score:     score,
-					Subject:   targetSubject, // ★ 寫入科目
+					Subject:   targetSubject,
 				})
 			}
 		}
 		
-		// 導回 Dashboard (記得帶上 subject 參數)
+		redirectUrl := "/teacher/dashboard"
+		if IsAdminMode {
+			redirectUrl += "?subject=" + targetSubject
+		}
+		c.Redirect(http.StatusSeeOther, redirectUrl)
+	})
+
+	// 📌 新增：上傳修課名單 (白名單)
+	teacher.POST("/upload-roster", func(c *gin.Context) {
+		targetSubject := CurrentSubject
+		if IsAdminMode {
+			targetSubject = c.PostForm("subject")
+		}
+
+		file, _ := c.FormFile("roster_file")
+		f, _ := file.Open()
+		defer f.Close()
+
+		reader := csv.NewReader(f)
+		records, err := reader.ReadAll()
+		if err != nil { c.String(400, "CSV 讀取失敗"); return }
+		
+		// 預期 CSV 格式: 學號, 姓名, 班級
+		// 簡單判斷：第一欄是 ID, 第二欄 Name, 第三欄 Class (如果有的話)
+		// 略過標題列 (假設第一列是標題)
+		
+		successCount := 0
+		for i, row := range records {
+			if i == 0 { continue } // 跳過標題
+			if len(row) < 2 { continue } // 至少要有學號跟名字
+
+			sid := strings.TrimSpace(row[0])
+			name := strings.TrimSpace(row[1])
+			course := ""
+			if len(row) > 2 {
+				course = strings.TrimSpace(row[2])
+			}
+
+			if sid == "" { continue }
+
+			// 寫入 Roster 表 (Update or Create)
+			db.Clauses(clause.OnConflict{
+				Columns:   []clause.Column{{Name: "student_id"}, {Name: "subject"}},
+				DoUpdates: clause.AssignmentColumns([]string{"name", "course", "updated_at"}),
+			}).Create(&models.Roster{
+				StudentID: sid,
+				Name:      name,
+				Course:    course,
+				Subject:   targetSubject,
+			})
+			successCount++
+		}
+
+		// 導回 Dashboard
+		redirectUrl := "/teacher/dashboard"
+		if IsAdminMode {
+			redirectUrl += "?subject=" + targetSubject
+		}
+		c.Redirect(http.StatusSeeOther, redirectUrl)
+	})
+
+	// 【新增：一鍵清空功能】
+	teacher.POST("/delete-all", func(c *gin.Context) {
+		targetSubject := CurrentSubject
+		if IsAdminMode {
+			targetSubject = c.PostForm("subject")
+		}
+
+		// 刪除該科目的所有成績
+		if err := db.Where("subject = ?", targetSubject).Delete(&models.Grade{}).Error; err != nil {
+			c.String(500, "刪除失敗")
+			return
+		}
+
+		// 導回 Dashboard
 		redirectUrl := "/teacher/dashboard"
 		if IsAdminMode {
 			redirectUrl += "?subject=" + targetSubject
@@ -478,12 +574,7 @@ func main() {
 
 	teacher.POST("/delete/:id", func(c *gin.Context) {
 		id := c.Param("id")
-		// 刪除時，GORM 預設會根據 Primary Key 刪除，所以不太需要擔心刪錯科目
-		// 但為了保險，如果是單一模式，可以加 Scope
 		db.Scopes(filterSubject).Unscoped().Delete(&models.Grade{}, id)
-		
-		// 這裡有個小問題：刪除後要導回哪裡？
-		// 簡單做法：回到上一頁 (Referer)
 		c.Redirect(http.StatusSeeOther, c.Request.Header.Get("Referer"))
 	})
 

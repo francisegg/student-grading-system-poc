@@ -1,34 +1,161 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>學生分數平台</title>
+    <title>{{ .AppName }}</title>
     <link rel="icon" type="image/png" href="/static/cover_egg.png">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { font-family: sans-serif; max-width: 800px; margin: 40px auto; text-align: center; }
-        .btn { padding: 10px 20px; background: #4285F4; color: white; text-decoration: none; border-radius: 5px; }
-        .teacher-btn { background: #ea4335; }
+        body {
+            font-family: "Microsoft JhengHei", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            color: #333;
+        }
+
+        /* 主容器動畫 */
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+            text-align: center;
+            width: 100%;
+            max-width: 400px;
+            animation: fadeIn 0.8s ease-out;
+            border: 1px solid #fff;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        h1 { margin-bottom: 10px; color: #1a73e8; font-size: 1.8rem; }
+        p { color: #5f6368; margin-bottom: 30px; line-height: 1.6; }
+        .egg-icon { font-size: 3rem; margin-bottom: 10px; display: block; animation: bounce 2s infinite; }
+
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% {transform: translateY(0);}
+            40% {transform: translateY(-10px);}
+            60% {transform: translateY(-5px);}
+        }
+
+        /* 按鈕通用樣式 */
+        .btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: bold;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-sizing: border-box;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        /* Google 登入按鈕 */
+        .btn-google {
+            background-color: #ffffff;
+            color: #757575;
+            border: 1px solid #dadce0;
+        }
+        .btn-google:hover {
+            background-color: #f8faff;
+            border-color: #d2e3fc;
+            color: #1a73e8;
+        }
+        .g-icon { margin-right: 10px; width: 18px; height: 18px; }
+
+        /* 主要功能按鈕 */
+        .btn-primary {
+            background: linear-gradient(135deg, #4285F4 0%, #3367D6 100%);
+            color: white;
+        }
+        
+        /* 老師按鈕 */
+        .btn-teacher {
+            background: linear-gradient(135deg, #ea4335 0%, #c5221f 100%);
+            color: white;
+        }
+
+        /* 登出連結 */
+        .logout-link {
+            display: inline-block;
+            margin-top: 20px;
+            color: #9aa0a6;
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: 0.2s;
+        }
+        .logout-link:hover { color: #5f6368; text-decoration: underline; }
+
+        /* 狀態標籤 */
+        .user-badge {
+            background: #e8f0fe;
+            color: #1a73e8;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            display: inline-block;
+            margin-bottom: 20px;
+        }
     </style>
 </head>
 <body>
-    <h1>🎓 學生分數平台</h1>
-    <hr>
-    
-    {{ if .Logged }}
-        <h2>你好，{{ .User.Name }}</h2>
-        <p>Email: {{ .User.Email }}</p>
+
+    <div class="container">
+        <span class="egg-icon">🎓</span>
+        <h1>{{ .AppName }}</h1>
         
-        <p><a href="/my-grades" class="btn">📄 查看我的成績單</a></p>
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
 
-        {{ if .IsTeacher }}
-            <br>
-            <p><a href="/teacher/dashboard" class="btn teacher-btn">👨‍🏫 老師管理後台</a></p>
+        {{ if .Logged }}
+            <div class="user-badge">
+                👋 你好，{{ .User.Name }}
+            </div>
+            <p style="font-size: 0.9rem; margin-bottom: 25px;">
+                Email: {{ .User.Email }}
+            </p>
+            
+            <a href="/my-grades" class="btn btn-primary">
+                📄 查看我的成績單
+            </a>
+
+            {{ if .IsTeacher }}
+                <a href="/teacher/dashboard" class="btn btn-teacher">
+                    👨‍🏫 進入老師管理後台
+                </a>
+            {{ end }}
+
+            <a href="/logout" class="logout-link">登出帳號</a>
+
+        {{ else }}
+            <p>
+                歡迎來到成績查詢系統<br>
+                請使用您的 Google 帳號進行登入
+            </p>
+            
+            <a href="/login" class="btn btn-google">
+                <svg class="g-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/><path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/><path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/><path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/></svg>
+                使用 Google 帳號登入
+            </a>
         {{ end }}
+    </div>
 
-        <br><br>
-        <a href="/logout">登出</a>
-    {{ else }}
-        <p>請登入以查看成績</p>
-        <a href="/login" class="btn">Google 登入</a>
-    {{ end }}
 </body>
 </html>

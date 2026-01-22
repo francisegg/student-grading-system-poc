@@ -1,33 +1,111 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>完成註冊</title>
+    <title>身分綁定</title>
     <link rel="icon" type="image/png" href="/static/cover_egg.png">
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8">
     <style>
-        body { font-family: sans-serif; max-width: 600px; margin: 40px auto; }
-        input, select { padding: 10px; width: 100%; margin: 10px 0; }
-        button { padding: 10px 20px; background: #34A853; color: white; border: none; width: 100%; cursor: pointer; }
+        body { 
+            font-family: "Microsoft JhengHei", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f0f2f5; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            min-height: 100vh; 
+            margin: 0; 
+            color: #333;
+        }
+        
+        .container { 
+            background: white; 
+            padding: 40px; 
+            border-radius: 16px; 
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05); 
+            text-align: center; 
+            width: 100%; 
+            max-width: 400px; 
+            animation: fadeIn 0.6s ease-out;
+            border: 1px solid #fff;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        h2 { margin-top: 0; color: #1a73e8; }
+        
+        input { 
+            padding: 12px 15px; 
+            width: 100%; 
+            margin: 10px 0 20px 0; 
+            border: 2px solid #e0e0e0; 
+            border-radius: 8px; 
+            box-sizing: border-box; 
+            font-size: 1.1rem; 
+            text-align: center;
+            transition: 0.2s;
+            outline: none;
+        }
+        
+        input:focus { border-color: #1a73e8; background: #f8faff; }
+
+        button { 
+            padding: 12px; 
+            width: 100%; 
+            background: linear-gradient(135deg, #34A853 0%, #2e8b46 100%); 
+            color: white; 
+            border: none; 
+            border-radius: 8px; 
+            font-size: 1rem; 
+            font-weight: bold; 
+            cursor: pointer; 
+            transition: 0.2s; 
+        }
+        
+        button:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(52, 168, 83, 0.3); }
+
+        .info-box { 
+            background: #e8f0fe; 
+            color: #1a73e8; 
+            padding: 15px; 
+            border-radius: 8px; 
+            font-size: 0.95rem; 
+            margin-bottom: 25px; 
+            text-align: left; 
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .label-text { font-weight: bold; font-size: 0.9rem; color: #5f6368; display: block; text-align: left; margin-bottom: 5px; }
     </style>
 </head>
 <body>
-    <h2>📝 初次登入設定</h2>
-    <p>系統檢測到您尚未綁定學號，請完成以下資料。</p>
-    
-    <form action="/register" method="POST">
-        <label>Google Email:</label>
-        <input type="text" value="{{ .Email }}" disabled>
+
+    <div class="container">
+        <h2>🔗 連結您的學籍資料</h2>
+        <p style="color: #666; margin-bottom: 25px; line-height: 1.5;">
+            歡迎！這是您第一次登入。<br>
+            請輸入學號，系統將自動驗證身分。
+        </p>
+
+        <div class="info-box">
+            <span style="font-size: 1.5rem;">📧</span>
+            <div>
+                <div style="font-size: 0.8rem; opacity: 0.8;">目前登入帳號</div>
+                <b>{{ .Email }}</b>
+            </div>
+        </div>
         
-        <label>您的學號:</label>
-        <input type="text" name="student_id" required placeholder="例如：110123456">
-        
-        <label>修讀課程:</label>
-        <select name="course">
-            <option value="math_101">微積分 A 班</option>
-            <option value="eng_101">大一英文</option>
-        </select>
-        
-        <button type="submit">確認綁定</button>
-    </form>
+        <form action="/register" method="POST">
+            <label class="label-text">您的學號 (Student ID)</label>
+            <input type="text" name="student_id" required placeholder="例如：110123456" autofocus autocomplete="off">
+            
+            <button type="submit">確認並綁定身分</button>
+        </form>
+    </div>
+
 </body>
 </html>
