@@ -295,6 +295,20 @@ r.POST("/register", func(c *gin.Context) {
 		var s models.Student
 		db.Scopes(filterSubject).First(&s, uid)
 
+		var globalGradeCount int64
+		// 注意：這裡是檢查整個科目 (CurrentSubject) 有沒有成績，而不只是該位學生
+		db.Model(&models.Grade{}).Where("subject = ?", CurrentSubject).Count(&globalGradeCount)
+
+		if globalGradeCount == 0 {
+			// 如果完全沒成績，直接顯示「尚未開放」頁面，避免後續計算報錯
+			c.HTML(http.StatusOK, "no_grades.html", gin.H{
+				"User":    s,
+				"AppName": AppName,
+				"Subject": CurrentSubject,
+			})
+			return
+		}
+
 		// 成績查詢邏輯...
 		var displayGrades []models.Grade
 		db.Scopes(filterSubject).Where("student_id = ? AND item_name != ?", s.StudentID, TotalScoreColName).Order("id asc").Find(&displayGrades)
