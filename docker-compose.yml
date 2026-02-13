@@ -1,79 +1,83 @@
-version: '3.8'
-
 services:
-  # ==========================================
-  # 🟢 唯一的資料庫 (省空間！)
-  # ==========================================
   db:
     image: postgres:15-alpine
     container_name: shared_db
     restart: always
     environment:
-      POSTGRES_USER: myuser
-      POSTGRES_PASSWORD: mypassword
-      POSTGRES_DB: shared_grades_db
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
     volumes:
       - shared_pg_data:/var/lib/postgresql/data
 
-  # ==========================================
-  # 🔵 課程 1：電路學 (學生入口)
-  # ==========================================
+  # --- 應用程式服務 (不直接對外開放 Ports) ---
   circuit:
     build: .
     container_name: app_circuit
     restart: always
-    ports:
-      - "127.0.0.1:8081:8080"
     environment:
       - DB_HOST=db
-      - DB_NAME=shared_grades_db
+      - DB_PORT=${DB_PORT}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
       - APP_NAME=電路學成績網
-      - APP_SUBJECT=circuit  # ★ 關鍵：指定科目
+      - APP_SUBJECT=circuit
       - TEACHER_WHITELIST=huangky.tw@gmail.com
-      # Google OAuth 設定 (Callback 指向 circuit.teaegg.space)
       - GOOGLE_REDIRECT_URL=https://circuit.teaegg.space/auth/callback
+      - SESSION_SECRET=${SESSION_SECRET}
     depends_on:
       - db
 
-  # ==========================================
-  # 🟣 課程 2：天線工程 (學生入口)
-  # ==========================================
   antenna:
     build: .
     container_name: app_antenna
     restart: always
-    ports:
-      - "127.0.0.1:8082:8080"
     environment:
       - DB_HOST=db
-      - DB_NAME=shared_grades_db
+      - DB_PORT=${DB_PORT}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
       - APP_NAME=天線工程成績網
-      - APP_SUBJECT=antenna # ★ 關鍵：指定科目
+      - APP_SUBJECT=antenna
       - TEACHER_WHITELIST=huangky.tw@gmail.com
-      # Google OAuth 設定 (Callback 指向 antenna.teaegg.space)
       - GOOGLE_REDIRECT_URL=https://antenna.teaegg.space/auth/callback
+      - SESSION_SECRET=${SESSION_SECRET}
     depends_on:
       - db
 
-  # ==========================================
-  # 🔴 老師總後台 (獨立入口)
-  # ==========================================
   admin-portal:
     build: .
     container_name: app_admin
     restart: always
-    ports:
-      - "127.0.0.1:8090:8080"
     environment:
       - DB_HOST=db
-      - DB_NAME=shared_grades_db
-      - APP_MODE=admin      # ★ 關鍵：管理員模式
+      - DB_PORT=${DB_PORT}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - APP_MODE=admin
       - APP_NAME=教師總管理後台
       - TEACHER_WHITELIST=huangky.tw@gmail.com
-      # Google OAuth 設定 (Callback 指向 admin.teaegg.space)
       - GOOGLE_REDIRECT_URL=https://admin.teaegg.space/auth/callback
+      - SESSION_SECRET=${SESSION_SECRET}
     depends_on:
       - db
+
+  # --- Docker 內部的 Nginx 反向代理 ---
+  nginx:
+    image: nginx:alpine
+    container_name: nginx_proxy
+    restart: always
+    ports:
+      - "80:80"  # 監聽主機的 80 埠
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - circuit
+      - antenna
+      - admin-portal
 
 volumes:
   shared_pg_data:
