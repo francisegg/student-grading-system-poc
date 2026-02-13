@@ -5,10 +5,11 @@ import "gorm.io/gorm"
 // Student 代表學生帳號資訊
 type Student struct {
     gorm.Model
-    StudentID string `gorm:"uniqueIndex"` // 對應 CSV 的 ID
-    Name      string                       // 學生姓名 (可由註冊或名單提供)
-    Class     string                       // 對應 CSV 的 Class
-    Email     string `gorm:"uniqueIndex"` // 用於 Google 登入對應
+    StudentID string `gorm:"uniqueIndex"` // 學號
+    Name      string                       // 學生姓名
+    Class     string                       // 班級 (對應 CSV 的 Class)
+    Email     string `gorm:"uniqueIndex"` // Google Email
+    Subject   string `gorm:"index"`        // 所屬科目 (例如 circuit)
 }
 
 type Grade struct {
@@ -19,10 +20,11 @@ type Grade struct {
 	Subject   string  `gorm:"index:idx_grade_item_subject,unique;not null"`
 }
 
-// Roster 用於記錄上傳的名單原始資料 (可選)
+// Roster 用於記錄上傳的名單原始資料
 type Roster struct {
     gorm.Model
-    StudentID string
-    Class     string
-    Subject   string // 區分是哪個課程的名單
+    StudentID string `gorm:"uniqueIndex:idx_roster_sid_subject"`
+    Name      string // 預留欄位 (若 CSV 有名字可用)
+    Class     string // 班級
+    Subject   string `gorm:"uniqueIndex:idx_roster_sid_subject"`
 }

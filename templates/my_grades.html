@@ -3,231 +3,65 @@
 <head>
     <title>我的成績儀表板</title>
     <link rel="icon" type="image/png" href="/static/cover_egg.png">
-
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: "Microsoft JhengHei", sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; }
         .container { max-width: 900px; margin: 0 auto; }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .btn { text-decoration: none; background: #6c757d; color: white; padding: 8px 15px; border-radius: 5px; font-size: 0.9em; }
-        
         .card { background: white; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); padding: 25px; margin-bottom: 25px; }
-        .card h3 { margin-top: 0; color: #333; border-bottom: 2px solid #f0f0f0; padding-bottom: 10px; }
-
-        .charts-row { display: flex; gap: 20px; }
-        .chart-box { flex: 1; min-width: 300px; }
-
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
-        th { color: #666; }
-        .score-val { font-weight: bold; color: #4285F4; }
-
-        .pr-badge {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white; padding: 5px 15px; border-radius: 20px; font-size: 0.9em; float: right;
-        }
-
-        /* --- 新增重點數據區樣式 --- */
         .metrics-row { display: flex; gap: 20px; margin-bottom: 25px; }
-        .metric-card {
-            flex: 1; background: white; padding: 20px; border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center; border-left: 5px solid #ddd;
-        }
-        .metric-title { font-size: 0.9em; color: #666; margin-bottom: 5px; }
-        .metric-value { font-size: 2em; font-weight: bold; color: #333; }
-        .metric-sub { font-size: 0.8em; color: #999; margin-top: 5px; }
+        .metric-card { flex: 1; background: white; padding: 20px; border-radius: 10px; text-align: center; border-left: 5px solid #ddd; }
         .card-blue { border-left-color: #4285F4; }
-        .card-green { border-left-color: #34A853; }
-        .card-orange { border-left-color: #FBBC05; }
-        
-        @media (max-width: 768px) { 
-            .charts-row { flex-direction: column; } 
-            .metrics-row { flex-direction: column; }
-        }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
     </style>
 </head>
 <body>
-
 <div class="container">
     <div class="header">
-        <h1>🎓 {{ .User.Name }} 的學習歷程</h1>
-        <a href="/" class="btn">⬅ 回首頁</a>
+        <div>
+            <h1>🎓 {{ .User.Name }} 的學習歷程</h1>
+            <p style="color: #666; margin: 0;">班級：{{ .User.Class }} | 學號：{{ .User.StudentID }}</p> </div>
+        <a href="/" style="text-decoration: none; color: #1a73e8;">⬅ 回首頁</a>
     </div>
 
     <div class="metrics-row">
         <div class="metric-card card-blue">
-            <div class="metric-title">目前累積總分</div>
-            <div class="metric-value">{{ printf "%.1f" .MyTotal }}</div>
-            <div class="metric-sub">分</div>
+            <div style="font-size: 0.9em; color: #666;">目前累積總分</div>
+            <div style="font-size: 2em; font-weight: bold;">{{ printf "%.1f" .MyTotal }}</div>
         </div>
-
-        <div class="metric-card card-orange">
-            <div class="metric-title">期末佔比 (剩餘權重)</div>
-            <div class="metric-value">{{ printf "%.1f" .FinalWeight }}%</div>
-            <div class="metric-sub">距離滿分還差</div>
-        </div>
-
-        <div class="metric-card card-green">
-            <div class="metric-title">🏆 全班前三高分</div>
-            <div style="text-align: left; display: inline-block; margin-top: 5px;">
-                {{ range $i, $score := .Top3 }}
-                    <div style="font-size: 1.1em; color: #444; margin: 4px 0;">
-                        <span style="margin-right:8px;">{{ if eq $i 0 }}🥇{{ else if eq $i 1 }}🥈{{ else }}🥉{{ end }}</span> 
-                        <b>{{ $score }}</b> 分
-                    </div>
-                {{ end }}
-            </div>
+        <div class="metric-card" style="border-left-color: #34A853;">
+            <div style="font-size: 0.9em; color: #666;">排名落點</div>
+            <div style="font-size: 1.5em; font-weight: bold;">PR {{ .Percentile }}</div>
         </div>
     </div>
 
-    <div class="charts-row">
-        <div class="card chart-box">
-            <h3>📈 積分累積趨勢</h3>
-            <canvas id="trendChart" height="200"></canvas>
-        </div>
-        <div class="card chart-box">
-            <div>
-                <h3>
-                    📊 全班落點分析
-                    <span class="pr-badge">贏過 {{ .Percentile }}% 的同學</span>
-                </h3>
-            </div>
-            <p style="font-size: 0.85em; color: #666; margin-bottom: 5px;">
-                目前總分：<b>{{ .MyTotal }}</b> / 全班平均：<b>{{ printf "%.1f" .ClassMean }}</b>
-            </p>
-            <p style="font-size: 0.8em; color: #999; margin: 0;">
-                (全班範圍：{{ .ClassMin }} ~ {{ .ClassMax }} 分)
-            </p>
-            <canvas id="distributionChart" height="200"></canvas>
-        </div>
+    <div class="card">
+        <h3>📈 積分累積趨勢</h3>
+        <canvas id="trendChart" height="150"></canvas>
     </div>
 
     <div class="card">
         <h3>📄 詳細成績數據</h3>
         <table>
-            <thead>
-                <tr>
-                    <th>評量項目</th>
-                    <th>單次分數</th>
-                    <th>累計積分</th>
-                </tr>
-            </thead>
-            <tbody id="scoreTableBody"></tbody>
+            <thead><tr><th>評量項目</th><th>單次分數</th></tr></thead>
+            <tbody>
+                {{ range .Grades }}
+                <tr><td>{{ .ItemName }}</td><td><b>{{ .Score }}</b></td></tr>
+                {{ end }}
+            </tbody>
         </table>
     </div>
 </div>
 
 <script>
-    // --- JavaScript 邏輯保持不變 ---
-    const rawLabels = [{{ range .Grades }}"{{ .ItemName }}",{{ end }}];
-    const rawScores = [{{ range .Grades }}{{ .Score }},{{ end }}];
-    const myTotalScore = {{ .MyTotal }};
-    const classMean = {{ .ClassMean }};
-    const classStdDev = {{ .ClassStdDev }};
-    const classMin = {{ .ClassMin }};
-    const classMax = {{ .ClassMax }};
-
-    let runningTotal = 0;
-    const cumulativeScores = rawScores.map(score => {
-        runningTotal += score;
-        return parseFloat(runningTotal.toFixed(2));
-    });
-
-    const ctxTrend = document.getElementById('trendChart').getContext('2d');
-    new Chart(ctxTrend, {
+    // 簡單圖表邏輯
+    const labels = [{{ range .Grades }}"{{ .ItemName }}",{{ end }}];
+    const data = [{{ range .Grades }}{{ .Score }},{{ end }}];
+    new Chart(document.getElementById('trendChart'), {
         type: 'line',
-        data: {
-            labels: rawLabels,
-            datasets: [{
-                label: '累計總分',
-                data: cumulativeScores,
-                borderColor: '#4285F4',
-                backgroundColor: 'rgba(66, 133, 244, 0.1)',
-                borderWidth: 2,
-                pointBackgroundColor: '#fff',
-                pointBorderColor: '#ea4335',
-                fill: true,
-                tension: 0.3
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: { legend: { display: false } },
-            scales: { y: { beginAtZero: true } }
-        }
+        data: { labels: labels, datasets: [{ label: '得分', data: data, borderColor: '#4285F4', tension: 0.3 }] }
     });
-
-    const startX = Math.floor(classMin);
-    const endX = Math.ceil(classMax);
-    const step = (endX - startX) / 60;
-
-    const distData = [];
-    const distLabels = [];
-    for (let x = startX; x <= endX; x += step) {
-        let y = 0;
-        if (classStdDev > 0) {
-            y = (1 / (classStdDev * Math.sqrt(2 * Math.PI))) * Math.exp(-0.5 * Math.pow((x - classMean) / classStdDev, 2));
-        } else {
-            y = (Math.abs(x - classMean) < 1) ? 1 : 0;
-        }
-        distLabels.push(x.toFixed(0));
-        distData.push({ x: x, y: y });
-    }
-
-    const myRangeData = distData.map(p => {
-        return p.x <= myTotalScore ? p.y : null;
-    });
-
-    const ctxDist = document.getElementById('distributionChart').getContext('2d');
-    new Chart(ctxDist, {
-        type: 'line',
-        data: {
-            labels: distLabels,
-            datasets: [
-                {
-                    label: '全班分佈',
-                    data: distData.map(p => p.y),
-                    borderColor: '#ddd',
-                    borderWidth: 1,
-                    pointRadius: 0,
-                    fill: false,
-                    tension: 0.4
-                },
-                {
-                    label: '我的位置',
-                    data: myRangeData,
-                    borderColor: 'rgba(118, 75, 162, 1)',
-                    backgroundColor: 'rgba(118, 75, 162, 0.5)',
-                    borderWidth: 2,
-                    pointRadius: 0,
-                    fill: true,
-                    tension: 0.4
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            plugins: { legend: { display: false }, tooltip: { enabled: false } },
-            scales: {
-                x: { title: { display: true, text: '總分區間 (Min ~ Max)' }, ticks: { maxTicksLimit: 6 } },
-                y: { display: false }
-            }
-        }
-    });
-
-    const tableBody = document.getElementById('scoreTableBody');
-    let tableHTML = '';
-    for (let i = rawLabels.length - 1; i >= 0; i--) {
-        tableHTML += `
-            <tr>
-                <td>${rawLabels[i]}</td>
-                <td style="color: #666;">+${rawScores[i]}</td>
-                <td class="score-val">${cumulativeScores[i]}</td>
-            </tr>
-        `;
-    }
-    tableBody.innerHTML = tableHTML;
 </script>
-
 </body>
 </html>

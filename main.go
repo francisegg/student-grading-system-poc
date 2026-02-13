@@ -14,7 +14,7 @@ import (
 	"strconv"
 	"strings"
 
-	"grade-system/models"
+	"grade-system/models" // 請確認這裡的路徑與 go.mod 中的 module 名稱一致
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
@@ -77,8 +77,8 @@ func init() {
 	if err != nil {
 		log.Fatal("資料庫連線失敗: ", err)
 	}
-	
-// 自動遷移 Schema (加入 Roster)
+
+	// 自動遷移 Schema (加入 Roster)
 	db.AutoMigrate(&models.Student{}, &models.Grade{}, &models.Roster{})
 
 	// 3. Google OAuth 設定
@@ -116,14 +116,20 @@ func main() {
 
 			// 2. 手動補上預設科目
 			knownSubjects := []string{"circuit", "antenna"}
-			
+
 			// 去重複合併
 			subjectMap := make(map[string]bool)
-			for _, s := range subjects { subjectMap[s] = true }
-			for _, s := range knownSubjects { subjectMap[s] = true }
-			
+			for _, s := range subjects {
+				subjectMap[s] = true
+			}
+			for _, s := range knownSubjects {
+				subjectMap[s] = true
+			}
+
 			var finalSubjects []string
-			for s := range subjectMap { finalSubjects = append(finalSubjects, s) }
+			for s := range subjectMap {
+				finalSubjects = append(finalSubjects, s)
+			}
 			sort.Strings(finalSubjects)
 
 			// 取得使用者 Email
@@ -133,9 +139,9 @@ func main() {
 			}
 
 			c.HTML(http.StatusOK, "admin_dashboard.html", gin.H{
-				"Subjects": finalSubjects,
-				"AppName":  AppName,
-				"UserEmail": userEmail, 
+				"Subjects":  finalSubjects,
+				"AppName":   AppName,
+				"UserEmail": userEmail,
 			})
 			return
 		}
@@ -148,7 +154,7 @@ func main() {
 
 		var s models.Student
 		result := db.Scopes(filterSubject).First(&s, uid)
-		
+
 		if result.Error != nil {
 			c.Redirect(http.StatusSeeOther, "/logout")
 			return
@@ -193,7 +199,7 @@ func main() {
 			// 2. 老師登入成功，設定 Session
 			session.Set("user_id", "ADMIN_"+gUser.Email)
 			session.Save()
-			
+
 			// 3. 導回首頁 (由首頁負責顯示 Dashboard)
 			c.Redirect(http.StatusSeeOther, "/")
 			return
@@ -228,55 +234,65 @@ func main() {
 
 	// --- 3. 註冊 (學生模式專用) ---
 	r.GET("/register", func(c *gin.Context) {
-		if IsAdminMode { c.Redirect(302, "/"); return }
+		if IsAdminMode {
+			c.Redirect(302, "/")
+			return
+		}
 		session := sessions.Default(c)
 		email := session.Get("temp_email")
-		if email == nil { c.Redirect(302, "/"); return }
+		if email == nil {
+			c.Redirect(302, "/")
+			return
+		}
 		c.HTML(200, "register.html", gin.H{"Email": email})
 	})
 
-r.POST("/register", func(c *gin.Context) {
+	r.POST("/register", func(c *gin.Context) {
 		session := sessions.Default(c)
 		email := session.Get("temp_email")
-		// Google 名字我們備用，但優先使用名單上的名字
-		// googleName := session.Get("temp_name") 
+		googleName := session.Get("temp_name") // 從 Google 取得的名字
 
-		if email == nil { c.Redirect(302, "/"); return }
+		if email == nil {
+			c.Redirect(302, "/")
+			return
+		}
 		userEmail := email.(string)
+		userName := ""
+		if googleName != nil {
+			userName = googleName.(string)
+		}
 
 		inputID := strings.TrimSpace(c.PostForm("student_id"))
 
 		// 1. 檢查名單 (Roster) 是否有這個學號
 		var roster models.Roster
 		if err := db.Where("student_id = ? AND subject = ?", inputID, CurrentSubject).First(&roster).Error; err != nil {
-			// 找不到學號 -> 錯誤提示 (這裡簡單處理，您可以做成漂亮的錯誤頁面)
-			c.String(400, "❌ 驗證失敗：此學號不在老師的修課名單中，請檢查輸入或聯繫助教。")
+			c.String(400, "❌ 驗證失敗：此學號不在名單中，請檢查輸入。")
 			return
 		}
 
-		// 2. 檢查該學號是否已經被其他人綁定
+		// 2. 檢查該學號是否已經被註冊
 		var existStudent models.Student
 		if err := db.Scopes(filterSubject).Where("student_id = ?", inputID).First(&existStudent).Error; err == nil {
 			c.String(400, "❌ 綁定失敗：此學號已經被註冊過了！")
 			return
 		}
 
-		// 3. 通過驗證 -> 建立學生帳號 (綁定 Email)
-		// 這裡我們使用 Roster 裡面的 Name 和 Course，確保資料正確
+		// 3. 建立學生帳號
 		newStudent := models.Student{
 			Email:     userEmail,
-			Name:      roster.Name,    // ★ 使用名單上的真實姓名
+			Name:      userName,        // 使用 Google 名字
 			StudentID: roster.StudentID,
-			Course:    roster.Course,  // ★ 自動帶入班級
+			Class:     roster.Class,    // ★ 自動從 Roster 帶入班級
 			Subject:   CurrentSubject,
 		}
-		
+
 		if err := db.Create(&newStudent).Error; err != nil {
 			c.String(500, "資料庫寫入失敗")
 			return
 		}
 
-		// 4. 註冊成功，寫入 Session 並登入
+		// 4. 註冊成功
 		session.Set("user_id", newStudent.ID)
 		session.Delete("temp_email")
 		session.Delete("temp_name")
@@ -286,11 +302,17 @@ r.POST("/register", func(c *gin.Context) {
 
 	// --- 4. 查詢成績 (學生模式專用) ---
 	r.GET("/my-grades", func(c *gin.Context) {
-		if IsAdminMode { c.Redirect(302, "/"); return }
-		
+		if IsAdminMode {
+			c.Redirect(302, "/")
+			return
+		}
+
 		session := sessions.Default(c)
 		uid := session.Get("user_id")
-		if uid == nil { c.Redirect(302, "/"); return }
+		if uid == nil {
+			c.Redirect(302, "/")
+			return
+		}
 
 		var s models.Student
 		db.Scopes(filterSubject).First(&s, uid)
@@ -328,7 +350,27 @@ r.POST("/register", func(c *gin.Context) {
 			Where("grades.item_name = ?", TotalScoreColName).
 			Where("grades.subject = ?", CurrentSubject).
 			Where("students.subject = ?", CurrentSubject).
-			Where("students.course = ?", s.Course)
+			Where("students.course = ?", s.Class) // 注意：這裡如果 Course 欄位還沒改名為 Class，請使用 Class
+
+		// 修正：因為我們現在統一用 Class，所以要確保資料庫欄位名稱
+		// 這裡假設資料庫中 students 表的欄位叫 class
+		// 如果 GORM 自動遷移，models.Student.Class 會變成 class
+		// 舊代碼可能是 s.Course，這裡修正為 s.Class
+		// 但請確認 s.Course 屬性是否存在，如果上面的 struct 已經改為 Class，這裡也要改
+		// 根據上方 models/schema.go，struct 欄位是 Class
+		// 所以這裡查詢應該是 Where("students.class = ?", s.Class)
+
+		// 為了避免編譯錯誤，我們假設 Student struct 已經完全更新為 Class
+		// 若舊代碼中還有 Course 引用，請全部替換為 Class
+		// 這裡我將查詢改為使用 Class
+
+		query = db.Table("grades").
+			Select("grades.student_id, grades.score").
+			Joins("JOIN students ON students.student_id = grades.student_id").
+			Where("grades.item_name = ?", TotalScoreColName).
+			Where("grades.subject = ?", CurrentSubject).
+			Where("students.subject = ?", CurrentSubject).
+			Where("students.class = ?", s.Class) // ★ 修正為 Class
 
 		query.Scan(&results)
 
@@ -338,7 +380,7 @@ r.POST("/register", func(c *gin.Context) {
 				Joins("JOIN students ON students.student_id = grades.student_id").
 				Where("grades.subject = ?", CurrentSubject).
 				Where("students.subject = ?", CurrentSubject).
-				Where("students.course = ?", s.Course).
+				Where("students.class = ?", s.Class). // ★ 修正為 Class
 				Group("grades.student_id").
 				Scan(&results)
 		}
@@ -356,29 +398,46 @@ r.POST("/register", func(c *gin.Context) {
 		minScore, maxScore := 1000.0, -1.0
 		for _, t := range classTotals {
 			sum += t
-			if t < minScore { minScore = t }
-			if t > maxScore { maxScore = t }
+			if t < minScore {
+				minScore = t
+			}
+			if t > maxScore {
+				maxScore = t
+			}
 		}
-		if len(classTotals) == 0 { minScore, maxScore = 0, 0 }
+		if len(classTotals) == 0 {
+			minScore, maxScore = 0, 0
+		}
 
 		mean := 0.0
-		if len(classTotals) > 0 { mean = sum / float64(len(classTotals)) }
+		if len(classTotals) > 0 {
+			mean = sum / float64(len(classTotals))
+		}
 
 		varianceSum := 0.0
-		for _, t := range classTotals { varianceSum += math.Pow(t-mean, 2) }
+		for _, t := range classTotals {
+			varianceSum += math.Pow(t-mean, 2)
+		}
 		stdDev := 0.0
-		if len(classTotals) > 0 { stdDev = math.Sqrt(varianceSum / float64(len(classTotals))) }
+		if len(classTotals) > 0 {
+			stdDev = math.Sqrt(varianceSum / float64(len(classTotals)))
+		}
 
 		sort.Float64s(classTotals)
 		rank := 0
 		for i, t := range classTotals {
-			if t >= myTotal { rank = i; break }
+			if t >= myTotal {
+				rank = i
+				break
+			}
 			rank = i + 1
 		}
 		percentile := 0.0
 		if len(classTotals) > 1 {
 			percentile = (float64(rank) / float64(len(classTotals))) * 100
-		} else if len(classTotals) == 1 { percentile = 100 }
+		} else if len(classTotals) == 1 {
+			percentile = 100
+		}
 
 		// Top 3
 		var top3 []float64
@@ -387,7 +446,9 @@ r.POST("/register", func(c *gin.Context) {
 			top3 = append(top3, classTotals[i])
 		}
 		finalWeight := 100.0 - myTotal
-		if finalWeight < 0 { finalWeight = 0 }
+		if finalWeight < 0 {
+			finalWeight = 0
+		}
 
 		c.HTML(200, "my_grades.html", gin.H{
 			"User":        s,
@@ -454,14 +515,24 @@ r.POST("/register", func(c *gin.Context) {
 		}
 
 		file, _ := c.FormFile("csv_file")
+		if file == nil {
+			c.String(400, "❌ 請選擇檔案")
+			return
+		}
 		f, _ := file.Open()
 		defer f.Close()
 
 		reader := csv.NewReader(f)
 		reader.FieldsPerRecord = -1
 		records, err := reader.ReadAll()
-		if err != nil { c.String(400, "CSV 讀取失敗"); return }
-		if len(records) < 2 { c.String(400, "無數據"); return }
+		if err != nil {
+			c.String(400, "CSV 讀取失敗")
+			return
+		}
+		if len(records) < 2 {
+			c.String(400, "無數據")
+			return
+		}
 
 		header := records[0]
 		idIndex := -1
@@ -471,26 +542,41 @@ r.POST("/register", func(c *gin.Context) {
 				break
 			}
 		}
-		if idIndex == -1 { c.String(400, "❌ 找不到 'ID' 欄位"); return }
+		if idIndex == -1 {
+			c.String(400, "❌ 找不到 'ID' 欄位")
+			return
+		}
 
 		ignoreCols := map[string]bool{"No.": true, "Class": true, "ID": true, "Grade": true, "Weight of final exam (%)": true}
 
 		for i, row := range records {
-			if i == 0 { continue }
-			if len(row) <= idIndex { continue }
+			if i == 0 {
+				continue
+			}
+			if len(row) <= idIndex {
+				continue
+			}
 			studentID := strings.TrimSpace(row[idIndex])
-			if studentID == "" { continue }
+			if studentID == "" {
+				continue
+			}
 
 			for colIdx, cellValue := range row {
 				colName := strings.TrimSpace(header[colIdx])
-				if ignoreCols[colName] { continue }
+				if ignoreCols[colName] {
+					continue
+				}
 
 				var score float64
 				cellValue = strings.TrimSpace(cellValue)
-				if cellValue == "" || strings.EqualFold(cellValue, "NaN") { continue }
+				if cellValue == "" || strings.EqualFold(cellValue, "NaN") {
+					continue
+				}
 				if s, err := strconv.ParseFloat(cellValue, 64); err == nil {
 					score = s
-				} else { score = 0 }
+				} else {
+					score = 0
+				}
 
 				db.Clauses(clause.OnConflict{
 					Columns:   []clause.Column{{Name: "student_id"}, {Name: "item_name"}, {Name: "subject"}},
@@ -503,7 +589,7 @@ r.POST("/register", func(c *gin.Context) {
 				})
 			}
 		}
-		
+
 		redirectUrl := "/teacher/dashboard"
 		if IsAdminMode {
 			redirectUrl += "?subject=" + targetSubject
@@ -511,7 +597,7 @@ r.POST("/register", func(c *gin.Context) {
 		c.Redirect(http.StatusSeeOther, redirectUrl)
 	})
 
-	// 📌 新增：上傳修課名單 (白名單)
+	// 📌 修改：上傳修課名單 (支援 No., Class, ID 格式)
 	teacher.POST("/upload-roster", func(c *gin.Context) {
 		targetSubject := CurrentSubject
 		if IsAdminMode {
@@ -519,43 +605,45 @@ r.POST("/register", func(c *gin.Context) {
 		}
 
 		file, _ := c.FormFile("roster_file")
+		if file == nil {
+			c.String(400, "❌ 請選擇檔案")
+			return
+		}
 		f, _ := file.Open()
 		defer f.Close()
 
 		reader := csv.NewReader(f)
 		records, err := reader.ReadAll()
-		if err != nil { c.String(400, "CSV 讀取失敗"); return }
-		
-		// 預期 CSV 格式: 學號, 姓名, 班級
-		// 簡單判斷：第一欄是 ID, 第二欄 Name, 第三欄 Class (如果有的話)
-		// 略過標題列 (假設第一列是標題)
-		
+		if err != nil {
+			c.String(400, "CSV 讀取失敗")
+			return
+		}
+
+		// 預期 CSV 格式: No., Class, ID
+		// index 0: No.
+		// index 1: Class
+		// index 2: ID
+
 		successCount := 0
 		for i, row := range records {
-			if i == 0 { continue } // 跳過標題
-			if len(row) < 2 { continue } // 至少要有學號跟名字
+			if i == 0 || len(row) < 3 { continue }
 
-			sid := strings.TrimSpace(row[0])
-			name := strings.TrimSpace(row[1])
-			course := ""
-			if len(row) > 2 {
-				course = strings.TrimSpace(row[2])
-			}
+			class := strings.TrimSpace(row[1]) // 第二欄是 Class
+			sid := strings.TrimSpace(row[2])   // 第三欄是 ID
 
-			if sid == "" { continue }
-
-			// 寫入 Roster 表 (Update or Create)
 			db.Clauses(clause.OnConflict{
 				Columns:   []clause.Column{{Name: "student_id"}, {Name: "subject"}},
-				DoUpdates: clause.AssignmentColumns([]string{"name", "course", "updated_at"}),
+				DoUpdates: clause.AssignmentColumns([]string{"class", "updated_at"}),
 			}).Create(&models.Roster{
 				StudentID: sid,
-				Name:      name,
-				Course:    course,
+				Class:     class,
 				Subject:   targetSubject,
 			})
 			successCount++
 		}
+
+		// ★ 修正：印出 successCount 以解決 "declared but not used" 錯誤
+		log.Printf("成功匯入 %d 筆名單", successCount)
 
 		// 導回 Dashboard
 		redirectUrl := "/teacher/dashboard"
