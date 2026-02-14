@@ -5,30 +5,24 @@ import (
 	"log"
 	"os"
 
+	"grade-system/models" // 確保 module 名稱對應 go.mod
+
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
-// DB 是一個全域變數，讓其他 package (如 controllers, models) 可以直接使用
 var DB *gorm.DB
 
-// ConnectToDB 負責建立與 PostgreSQL 的連線
 func ConnectToDB() {
 	var err error
-
-	// 從環境變數讀取連線字串 (DSN)
-	dsn := os.Getenv("DB_URL") 
-    // 假設 .env 裡是: DB_URL="host=localhost user=postgres password=password dbname=grades port=5432 sslmode=disable"
-	
-	if dsn == "" {
-		log.Fatal("DB_URL not found in .env file")
-	}
+	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=Asia/Taipei",
+		os.Getenv("DB_HOST"), os.Getenv("DB_USER"), os.Getenv("DB_PASSWORD"), os.Getenv("DB_NAME"), os.Getenv("DB_PORT"))
 
 	DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
-
 	if err != nil {
-		log.Fatal("Failed to connect to database:", err)
+		log.Fatal("資料庫連線失敗: ", err)
 	}
 
-	fmt.Println("Successfully connected to the database!")
+	// 自動遷移
+	DB.AutoMigrate(&models.Student{}, &models.Grade{}, &models.Roster{})
 }
