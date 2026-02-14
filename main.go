@@ -5,6 +5,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"html/template" // ★ 新增這個 import，為了使用 template.FuncMap
 	"io/ioutil"
 	"log"
 	"math"
@@ -14,7 +15,7 @@ import (
 	"strconv"
 	"strings"
 
-	"grade-system/models" // 請確認這裡的路徑與 go.mod 中的 module 名稱一致
+	"grade-system/models"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
@@ -93,6 +94,15 @@ func init() {
 
 func main() {
 	r := gin.Default()
+
+	// ★★★ 關鍵修正：註冊 inc 函式 ★★★
+	// 這一段必須放在 LoadHTMLGlob 之前
+	r.SetFuncMap(template.FuncMap{
+		"inc": func(i int) int {
+			return i + 1
+		},
+	})
+
 	store := cookie.NewStore([]byte(os.Getenv("SESSION_SECRET")))
 	r.Use(sessions.Sessions("mysession", store))
 	r.LoadHTMLGlob("templates/*")
@@ -281,9 +291,9 @@ func main() {
 		// 3. 建立學生帳號
 		newStudent := models.Student{
 			Email:     userEmail,
-			Name:      userName,        // 使用 Google 名字
+			Name:      userName,     // 使用 Google 名字
 			StudentID: roster.StudentID,
-			Class:     roster.Class,    // ★ 自動從 Roster 帶入班級
+			Class:     roster.Class, // ★ 自動從 Roster 帶入班級
 			Subject:   CurrentSubject,
 		}
 
@@ -345,26 +355,6 @@ func main() {
 		var results []Result
 
 		query := db.Table("grades").
-			Select("grades.student_id, grades.score").
-			Joins("JOIN students ON students.student_id = grades.student_id").
-			Where("grades.item_name = ?", TotalScoreColName).
-			Where("grades.subject = ?", CurrentSubject).
-			Where("students.subject = ?", CurrentSubject).
-			Where("students.course = ?", s.Class) // 注意：這裡如果 Course 欄位還沒改名為 Class，請使用 Class
-
-		// 修正：因為我們現在統一用 Class，所以要確保資料庫欄位名稱
-		// 這裡假設資料庫中 students 表的欄位叫 class
-		// 如果 GORM 自動遷移，models.Student.Class 會變成 class
-		// 舊代碼可能是 s.Course，這裡修正為 s.Class
-		// 但請確認 s.Course 屬性是否存在，如果上面的 struct 已經改為 Class，這裡也要改
-		// 根據上方 models/schema.go，struct 欄位是 Class
-		// 所以這裡查詢應該是 Where("students.class = ?", s.Class)
-
-		// 為了避免編譯錯誤，我們假設 Student struct 已經完全更新為 Class
-		// 若舊代碼中還有 Course 引用，請全部替換為 Class
-		// 這裡我將查詢改為使用 Class
-
-		query = db.Table("grades").
 			Select("grades.student_id, grades.score").
 			Joins("JOIN students ON students.student_id = grades.student_id").
 			Where("grades.item_name = ?", TotalScoreColName).
@@ -500,11 +490,28 @@ func main() {
 		var allGrades []models.Grade
 		db.Where("subject = ?", targetSubject).Order("created_at desc").Find(&allGrades)
 
+		// ★ 新增功能：查詢名單與註冊狀態
+		type RosterRow struct {
+			Class     string
+			StudentID string
+			Name      string
+			Email     string
+		}
+		var rosterRows []RosterRow
+
+		db.Table("rosters").
+			Select("rosters.class, rosters.student_id, rosters.name, students.email").
+			Joins("LEFT JOIN students ON students.student_id = rosters.student_id").
+			Where("rosters.subject = ?", targetSubject).
+			Order("rosters.class ASC, rosters.student_id ASC").
+			Scan(&rosterRows)
+
 		c.HTML(200, "teacher.html", gin.H{
-			"AllGrades": allGrades,
-			"Subject":   targetSubject,
-			"AppName":   AppName,
-			"IsAdmin":   IsAdminMode,
+			"AllGrades":   allGrades,
+			"RosterList":  rosterRows,
+			"Subject":     targetSubject,
+			"AppName":     AppName,
+			"IsAdmin":     IsAdminMode,
 		})
 	})
 
@@ -619,18 +626,24 @@ func main() {
 			return
 		}
 
-		// 預期 CSV 格式: No., Class, ID
-		// index 0: No.
-		// index 1: Class
-		// index 2: ID
-
 		successCount := 0
 		for i, row := range records {
-			if i == 0 || len(row) < 3 { continue }
+			if i == 0 {
+				continue
+			} // 跳過標題列
+			if len(row) < 3 {
+				continue
+			} // 確保欄位足夠
 
-			class := strings.TrimSpace(row[1]) // 第二欄是 Class
-			sid := strings.TrimSpace(row[2])   // 第三欄是 ID
+			// 解析 CSV 欄位
+			class := strings.TrimSpace(row[1]) // 第二欄是班級
+			sid := strings.TrimSpace(row[2])   // 第三欄是學號
 
+			if sid == "" {
+				continue
+			}
+
+			// 寫入 Roster 表
 			db.Clauses(clause.OnConflict{
 				Columns:   []clause.Column{{Name: "student_id"}, {Name: "subject"}},
 				DoUpdates: clause.AssignmentColumns([]string{"class", "updated_at"}),
@@ -642,7 +655,6 @@ func main() {
 			successCount++
 		}
 
-		// ★ 修正：印出 successCount 以解決 "declared but not used" 錯誤
 		log.Printf("成功匯入 %d 筆名單", successCount)
 
 		// 導回 Dashboard

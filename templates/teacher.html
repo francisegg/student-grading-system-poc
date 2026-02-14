@@ -23,9 +23,13 @@
         .btn-primary { background: #1a73e8; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 0.95rem; transition: 0.2s; font-weight: bold; }
         .btn-secondary { background: #2c3e50; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 0.95rem; transition: 0.2s; font-weight: bold; }
         .btn-danger { background: white; color: #d93025; border: 1px solid #d93025; padding: 8px; width: 100%; border-radius: 4px; cursor: pointer; transition: 0.2s; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; background: white; border-radius: 8px; overflow: hidden; }
-        th { background-color: #f8f9fa; color: #5f6368; text-align: left; padding: 15px; border-bottom: 2px solid #e0e0e0; }
-        td { padding: 15px; border-bottom: 1px solid #f1f3f4; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; background: white; border-radius: 8px; overflow: hidden; margin-bottom: 30px; border: 1px solid #e0e0e0; }
+        th { background-color: #f8f9fa; color: #5f6368; text-align: left; padding: 12px 15px; border-bottom: 2px solid #e0e0e0; font-size: 0.95rem; }
+        td { padding: 12px 15px; border-bottom: 1px solid #f1f3f4; font-size: 0.95rem; vertical-align: middle; }
+        tr:hover { background-color: #f8faff; }
+        .status-badge { padding: 4px 10px; border-radius: 12px; font-size: 0.85em; font-weight: bold; }
+        .status-ok { background-color: #e6f4ea; color: #137333; }
+        .status-missing { background-color: #fce8e6; color: #c5221f; }
         @media (max-width: 900px) { .container { grid-template-columns: 1fr; } }
     </style>
 </head>
@@ -84,7 +88,48 @@
         </div>
 
         <div style="flex: 1;">
-            <h3>📊 目前成績列表 ({{ .Subject }})</h3>
+            
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h3 style="margin: 0; color: #202124;">📋 修課名單與註冊狀態</h3>
+                <span style="font-size: 0.9em; color: #666;">共 {{ len .RosterList }} 人</span>
+            </div>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 50px;">#</th>
+                        <th>班級 (Class)</th>
+                        <th>學號 (Student ID)</th>
+                        <th>姓名 (Name)</th>
+                        <th>註冊 Email (Registered Email)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{ range $index, $r := .RosterList }}
+                    <tr>
+                        <td style="color: #999;">{{ inc $index }}</td>
+                        <td>{{ .Class }}</td>
+                        <td><b>{{ .StudentID }}</b></td>
+                        <td>{{ .Name }}</td>
+                        <td>
+                            {{ if .Email }}
+                                <span class="status-badge status-ok">✅ {{ .Email }}</span>
+                            {{ else }}
+                                <span class="status-badge status-missing">❌ 尚未註冊</span>
+                            {{ end }}
+                        </td>
+                    </tr>
+                    {{ else }}
+                    <tr><td colspan="5" style="text-align:center; padding: 30px; color: #999;">尚未上傳修課名單</td></tr>
+                    {{ end }}
+                </tbody>
+            </table>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; margin-top: 40px;">
+                <h3 style="margin: 0; color: #202124;">📊 已上傳成績列表</h3>
+                <span style="font-size: 0.9em; color: #666;">共 {{ len .AllGrades }} 筆紀錄</span>
+            </div>
+
             <table>
                 <thead>
                     <tr>
@@ -102,12 +147,12 @@
                         <td><b>{{ .Score }}</b></td>
                         <td>
                             <form action="/teacher/delete/{{.ID}}" method="POST" style="margin:0;">
-                                <button type="submit">🗑️</button>
+                                <button type="submit" class="btn-sm-delete">🗑️</button>
                             </form>
                         </td>
                     </tr>
                     {{ else }}
-                    <tr><td colspan="4" style="text-align:center;">暫無資料</td></tr>
+                    <tr><td colspan="4" style="text-align:center; padding: 20px;">暫無成績資料</td></tr>
                     {{ end }}
                 </tbody>
             </table>
