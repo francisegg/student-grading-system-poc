@@ -80,7 +80,14 @@
             </div>
 
             <div class="danger-zone">
-                <form action="/teacher/delete-all" method="POST" onsubmit="return confirm('確定要清空嗎？');">
+                <span class="danger-title">⚠️ 危險操作區域</span>
+                
+                <form action="/teacher/delete-roster" method="POST" onsubmit="return confirm('🧨 嚴重警告：\n\n確定要刪除 [{{ .Subject }}] 的修課名單嗎？\n\n這不會刪除已上傳的成績，但會影響成績上傳的驗證！');" style="margin-bottom: 10px;">
+                    {{ if .IsAdmin }}<input type="hidden" name="subject" value="{{ .Subject }}">{{ end }}
+                    <button type="submit" class="btn-danger">🗑️ 清空修課名單</button>
+                </form>
+
+                <form action="/teacher/delete-all" method="POST" onsubmit="return confirm('🧨 嚴重警告：\n\n確定要清空 [{{ .Subject }}] 的所有成績資料嗎？\n\n此動作無法復原！');">
                     {{ if .IsAdmin }}<input type="hidden" name="subject" value="{{ .Subject }}">{{ end }}
                     <button type="submit" class="btn-danger">💣 清空本科目成績</button>
                 </form>
