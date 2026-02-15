@@ -1,22 +1,122 @@
 version: '3.8'
 
 services:
+  # --- 1. 共用資料庫 ---
   db:
     image: postgres:15-alpine
-    container_name: shared_db
+    container_name: grade_db
     restart: always
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME}
     ports:
-      - "5432:5432"  # 開放給本機 Go 程式連線
+      - "5432:5432"
     volumes:
-      - shared_pg_data:/var/lib/postgresql/data
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - grade_net
+    # 加入健康檢查，讓其他服務知道 DB 何時準備好
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
-  # 其他服務先註解掉，專注於本機開發
-  # circuit: ...
-  # antenna: ...
-  # nginx: ...
+  # --- 2. 電路學網站 (Circuit) ---
+  circuit:
+    build: .
+    container_name: app_circuit
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy # 等到 DB 健康才啟動
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - APP_SUBJECT=circuit
+      - APP_NAME=電路學成績查詢系統
+      - APP_MODE=student
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_REDIRECT_URL=https://circuit.teaegg.space/auth/callback
+      - SESSION_SECRET=${SESSION_SECRET}
+      - TEACHER_WHITELIST=${TEACHER_WHITELIST}
+    networks:
+      - grade_net
+
+  # --- 3. 天線工程網站 (Antenna) ---
+  antenna:
+    build: .
+    container_name: app_antenna
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - APP_SUBJECT=antenna
+      - APP_NAME=天線工程成績查詢
+      - APP_MODE=student
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_REDIRECT_URL=https://antenna.teaegg.space/auth/callback
+      - SESSION_SECRET=${SESSION_SECRET}
+      - TEACHER_WHITELIST=${TEACHER_WHITELIST}
+    networks:
+      - grade_net
+
+  # --- 4. 教師總管理後台 (Admin Portal) ---
+  admin-portal:
+    build: .
+    container_name: app_admin
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - APP_SUBJECT=admin
+      - APP_NAME=教師總管理後台
+      - APP_MODE=admin
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_REDIRECT_URL=https://admin.teaegg.space/auth/callback
+      - SESSION_SECRET=${SESSION_SECRET}
+      - TEACHER_WHITELIST=${TEACHER_WHITELIST}
+    networks:
+      - grade_net
+
+  # --- 5. Nginx 反向代理 (網域分流) ---
+  nginx:
+    image: nginx:alpine
+    container_name: grade_nginx
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    # 確保後端服務都起來了，Nginx 再啟動
+    depends_on:
+      - circuit
+      - antenna
+      - admin-portal
+    networks:
+      - grade_net
+
 volumes:
-  shared_pg_data:
+  pg_data:
+
+networks:
+  grade_net:
