@@ -6,156 +6,225 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body {
-            font-family: "Microsoft JhengHei", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            background-color: #f0f2f5;
-            display: flex;
-            justify-content: center;
-            align-items: center;
+        /* --- 全局日系暖色風格 --- */
+        body { 
+            font-family: "Microsoft JhengHei", "Hiragino Sans GB", sans-serif; 
+            background-color: #f9f7f2; /* 米白背景 */
+            color: #595755; /* 暖深灰文字 */
+            margin: 0; 
+            padding: 0; 
             min-height: 100vh;
-            margin: 0;
-            color: #333;
-        }
-
-        /* 主容器動畫 */
-        .container {
-            background: white;
-            padding: 40px;
-            border-radius: 16px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
-            text-align: center;
-            width: 100%;
-            max-width: 400px;
-            animation: fadeIn 0.8s ease-out;
-            border: 1px solid #fff;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        h1 { margin-bottom: 10px; color: #1a73e8; font-size: 1.8rem; }
-        p { color: #5f6368; margin-bottom: 30px; line-height: 1.6; }
-        .egg-icon { font-size: 3rem; margin-bottom: 10px; display: block; animation: bounce 2s infinite; }
-
-        @keyframes bounce {
-            0%, 20%, 50%, 80%, 100% {transform: translateY(0);}
-            40% {transform: translateY(-10px);}
-            60% {transform: translateY(-5px);}
-        }
-
-        /* 按鈕通用樣式 */
-        .btn {
             display: flex;
-            align-items: center;
             justify-content: center;
-            width: 100%;
-            padding: 12px;
-            margin: 10px 0;
-            border: none;
-            border-radius: 8px;
-            font-size: 1rem;
+            align-items: center; /* 垂直水平置中 */
+        }
+
+        /* --- Loading 過場動畫 (與成績頁一致) --- */
+        #loading-screen {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: #f9f7f2;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 0.6s ease-out, visibility 0.6s ease-out;
+        }
+
+        .loading-egg {
+            width: 50px; height: 60px;
+            background-color: #6a8ecf; /* 柔和藍 */
+            border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+            animation: breathe 1.5s infinite ease-in-out;
+            box-shadow: 0 10px 20px rgba(106, 142, 207, 0.3);
+        }
+
+        @keyframes breathe {
+            0%, 100% { transform: scale(0.9); opacity: 0.8; }
+            50% { transform: scale(1.1); opacity: 1; }
+        }
+
+        .loading-text {
+            margin-top: 20px;
+            color: #8e8071;
+            font-size: 0.9em;
+            letter-spacing: 2px;
             font-weight: bold;
+            animation: fadeIn 1.5s infinite alternate;
+        }
+
+        .hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+
+        /* --- 主內容卡片 --- */
+        .login-card {
+            background: #ffffff;
+            width: 100%;
+            max-width: 420px; /* 限制寬度，更精緻 */
+            padding: 50px 40px;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(163, 148, 133, 0.15); /* 暖色柔和陰影 */
+            text-align: center;
+            border: 1px solid #f0ebe5;
+            transform: translateY(20px);
+            opacity: 0;
+            animation: slideUpFade 0.8s ease-out forwards 0.5s; /* Loading 後浮現 */
+        }
+
+        @keyframes slideUpFade {
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .logo-img {
+            width: 100px;
+            height: auto;
+            margin-bottom: 25px;
+            /* 讓 Logo 也有點溫潤的質感 */
+            filter: drop-shadow(0 4px 6px rgba(163, 148, 133, 0.2));
+        }
+
+        h1 {
+            font-size: 1.6em;
+            color: #4a4a4a;
+            margin: 0 0 10px 0;
+            font-weight: 600;
+        }
+
+        p {
+            color: #888;
+            line-height: 1.6;
+            margin-bottom: 35px;
+            font-size: 0.95em;
+        }
+
+        /* --- 按鈕樣式 --- */
+        .btn-group {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 12px 0;
+            border-radius: 8px;
             text-decoration: none;
-            cursor: pointer;
+            font-weight: bold;
+            font-size: 1em;
             transition: all 0.2s ease;
             box-sizing: border-box;
+            cursor: pointer;
         }
 
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }
-
-        /* Google 登入按鈕 */
-        .btn-google {
-            background-color: #ffffff;
-            color: #757575;
-            border: 1px solid #dadce0;
-        }
-        .btn-google:hover {
-            background-color: #f8faff;
-            border-color: #d2e3fc;
-            color: #1a73e8;
-        }
-        .g-icon { margin-right: 10px; width: 18px; height: 18px; }
-
-        /* 主要功能按鈕 */
+        /* 主要按鈕 (柔和藍) */
         .btn-primary {
-            background: linear-gradient(135deg, #4285F4 0%, #3367D6 100%);
+            background-color: #6a8ecf;
             color: white;
+            box-shadow: 0 4px 10px rgba(106, 142, 207, 0.3);
+            border: none;
         }
-        
-        /* 老師按鈕 */
-        .btn-teacher {
-            background: linear-gradient(135deg, #ea4335 0%, #c5221f 100%);
-            color: white;
+        .btn-primary:hover {
+            background-color: #5a7ebf;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(106, 142, 207, 0.4);
         }
 
-        /* 登出連結 */
-        .logout-link {
-            display: inline-block;
-            margin-top: 20px;
-            color: #9aa0a6;
-            text-decoration: none;
-            font-size: 0.9rem;
-            transition: 0.2s;
+        /* 次要按鈕 (暖棕灰) */
+        .btn-secondary {
+            background-color: #8e8071;
+            color: white;
+            box-shadow: 0 4px 10px rgba(142, 128, 113, 0.3);
         }
-        .logout-link:hover { color: #5f6368; text-decoration: underline; }
+        .btn-secondary:hover {
+            background-color: #756a5d;
+            transform: translateY(-2px);
+        }
 
-        /* 狀態標籤 */
-        .user-badge {
-            background: #e8f0fe;
-            color: #1a73e8;
-            padding: 5px 12px;
-            border-radius: 20px;
-            font-size: 0.9rem;
-            display: inline-block;
-            margin-bottom: 20px;
+        /* 幽靈按鈕 (外框) */
+        .btn-outline {
+            background-color: transparent;
+            border: 2px solid #e0dcd5;
+            color: #8e8071;
         }
+        .btn-outline:hover {
+            border-color: #8e8071;
+            background-color: #fcfbf9;
+        }
+
+        /* 使用者資訊區塊 */
+        .user-info {
+            background-color: #f9f7f2;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 25px;
+            text-align: left;
+            border: 1px solid #efebe5;
+        }
+        .user-info div {
+            margin: 5px 0;
+            font-size: 0.9em;
+            color: #666;
+        }
+        .user-info b {
+            color: #4a4a4a;
+        }
+        .user-welcome {
+            font-size: 1.1em;
+            color: #8e8071;
+            font-weight: bold;
+            margin-bottom: 10px !important;
+        }
+
     </style>
 </head>
 <body>
 
-    <div class="container">
-        <span class="egg-icon">🎓</span>
+    <div id="loading-screen">
+        <div class="loading-egg"></div>
+        <div class="loading-text">LOADING</div>
+    </div>
+
+    <div class="login-card">
+        <!-- <img src="/static/cover_egg.png" alt="Logo" class="logo-img"> -->
+        
         <h1>{{ .AppName }}</h1>
         
-        <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
-
         {{ if .Logged }}
-            <div class="user-badge">
-                👋 你好，{{ .User.Name }}
+            <div class="user-info">
+                <div class="user-welcome">歡迎回來，{{ .User.Name }}</div>
+                <div>學號：<b>{{ .User.StudentID }}</b></div>
+                <div>班級：<b>{{ .User.Class }}</b></div>
+                <div style="font-size: 0.85em; color: #999; margin-top: 8px;">{{ .User.Email }}</div>
             </div>
-            <p style="font-size: 0.9rem; margin-bottom: 25px;">
-                Email: {{ .User.Email }}
-            </p>
-            
-            <a href="/my-grades" class="btn btn-primary">
-                📄 查看我的成績單
-            </a>
 
-            {{ if .IsTeacher }}
-                <a href="/teacher/dashboard" class="btn btn-teacher">
-                    👨‍🏫 進入老師管理後台
-                </a>
-            {{ end }}
-
-            <a href="/logout" class="logout-link">登出帳號</a>
+            <div class="btn-group">
+                {{ if .IsTeacher }}
+                    <a href="/teacher/dashboard" class="btn btn-secondary">進入教師管理後台</a>
+                {{ end }}
+                
+                <a href="/my-grades" class="btn btn-primary">查看我的成績</a>
+                <a href="/logout" class="btn btn-outline">登出</a>
+            </div>
 
         {{ else }}
-            <p>
-                歡迎來到成績查詢系統<br>
-                請使用您的 Google 帳號進行登入
-            </p>
+            <p>歡迎使用成績查詢系統<br>請使用 Google 帳號進行登入以查看您的學習紀錄</p>
             
-            <a href="/login" class="btn btn-google">
-                <svg class="g-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/><path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/><path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/><path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/></svg>
-                使用 Google 帳號登入
-            </a>
+            <div class="btn-group">
+                <a href="/login" class="btn btn-primary">Google 帳號登入</a>
+            </div>
         {{ end }}
     </div>
+
+    <script>
+        // 過場動畫邏輯
+        window.addEventListener('load', function() {
+            const loader = document.getElementById('loading-screen');
+            setTimeout(() => {
+                loader.classList.add('hidden');
+            }, 500);
+        });
+    </script>
 
 </body>
 </html>

@@ -23,6 +23,10 @@ func init() {
 func main() {
 	r := gin.Default()
 
+	// ★★★ 新增這行：設定靜態檔案路由 ★★★
+	// 這樣瀏覽器才能讀取到 /static/cover_egg.png
+	r.Static("/static", "./static")
+
 	// 註冊樣板函式
 	r.SetFuncMap(template.FuncMap{
 		"inc": utils.Inc,

@@ -13,7 +13,15 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const TotalScoreColName = "Total learning-progress points"
+// 定義要排除的非成績欄位 (黑名單)
+var IgnoredGradeItems = []string{
+	"Total learning-progress points",
+	"No.", "No", "NO",
+	"Class", "class",
+	"ID", "id", "Student ID", "student_id",
+	"Name", "name",
+	"Weight of final exam (%)",
+}
 
 func ShowIndex(c *gin.Context) {
 	session := sessions.Default(c)
@@ -152,9 +160,18 @@ func ShowMyGrades(c *gin.Context) {
 		return
 	}
 
+	// 1. 取得學生帳號資訊
 	var s models.Student
 	initializers.DB.Scopes(utils.FilterSubject).First(&s, uid)
 
+	// 2. 直接從名單 (Roster) 獲取最新的班級資訊，確保資料正確
+	var currentRoster models.Roster
+	targetClass := s.Class
+	if err := initializers.DB.Where("student_id = ? AND subject = ?", s.StudentID, initializers.CurrentSubject).First(&currentRoster).Error; err == nil {
+		targetClass = currentRoster.Class
+	}
+
+	// 檢查該科目是否有成績
 	var globalGradeCount int64
 	initializers.DB.Model(&models.Grade{}).Where("subject = ?", initializers.CurrentSubject).Count(&globalGradeCount)
 
@@ -167,10 +184,11 @@ func ShowMyGrades(c *gin.Context) {
 		return
 	}
 
+	// 3. 抓取該學生的成績明細 (用於列表顯示)
 	var displayGrades []models.Grade
 	initializers.DB.Scopes(utils.FilterSubject).
 		Where("student_id = ?", s.StudentID).
-		Where("item_name NOT IN ?", []string{TotalScoreColName, "No.", "No"}).
+		Where("item_name NOT IN ?", IgnoredGradeItems).
 		Order("id asc").
 		Find(&displayGrades)
 
@@ -183,16 +201,18 @@ func ShowMyGrades(c *gin.Context) {
 	}
 	var results []Result
 
+	// 4. 計算全班成績分佈 (改為 JOIN rosters 確保包含所有人)
 	initializers.DB.Table("grades").
 		Select("grades.student_id, SUM(grades.score) as score").
-		Joins("JOIN students ON students.student_id = grades.student_id").
+		Joins("JOIN rosters ON rosters.student_id = grades.student_id").
 		Where("grades.subject = ?", initializers.CurrentSubject).
-		Where("grades.item_name NOT IN ?", []string{"No.", "No"}).
-		Where("students.subject = ?", initializers.CurrentSubject).
-		Where("students.class = ?", s.Class).
+		Where("grades.item_name NOT IN ?", IgnoredGradeItems).
+		Where("rosters.subject = ?", initializers.CurrentSubject).
+		Where("rosters.class = ?", targetClass).
 		Group("grades.student_id").
 		Scan(&results)
 
+	// 尋找自己的總分
 	for _, r := range results {
 		classTotals = append(classTotals, r.Score)
 		if r.StudentID == s.StudentID {
@@ -201,7 +221,7 @@ func ShowMyGrades(c *gin.Context) {
 	}
 	myTotal := myTotalGrade.Score
 
-	// 統計計算
+	// --- 統計計算 ---
 	sum := 0.0
 	minScore, maxScore := 1000.0, -1.0
 	for _, t := range classTotals {
@@ -240,11 +260,18 @@ func ShowMyGrades(c *gin.Context) {
 		}
 		rank = i + 1
 	}
-	percentile := 0.0
+
+	// ★★★ 關鍵修正：PR 值正規化 (0-99) ★★★
+	percentile := 0
 	if len(classTotals) > 1 {
-		percentile = (float64(rank) / float64(len(classTotals))) * 100
-	} else if len(classTotals) == 1 {
-		percentile = 100
+		// 計算贏過多少人
+		p := math.Floor((float64(rank) / float64(len(classTotals))) * 100)
+		percentile = int(p)
+		if percentile > 99 {
+			percentile = 99 // 封頂 99
+		}
+	} else {
+		percentile = 99 // 只有一人時
 	}
 
 	var top3 []float64
@@ -252,6 +279,7 @@ func ShowMyGrades(c *gin.Context) {
 	for i := count - 1; i >= 0 && len(top3) < 3; i-- {
 		top3 = append(top3, classTotals[i])
 	}
+
 	finalWeight := 100.0 - myTotal
 	if finalWeight < 0 {
 		finalWeight = 0
@@ -265,7 +293,7 @@ func ShowMyGrades(c *gin.Context) {
 		"ClassStdDev": stdDev,
 		"ClassMin":    minScore,
 		"ClassMax":    maxScore,
-		"Percentile":  int(percentile),
+		"Percentile":  percentile,
 		"Top3":        top3,
 		"FinalWeight": finalWeight,
 		"AppName":     initializers.AppName,

@@ -1,27 +1,228 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>身分綁定</title>
+    <title>註冊學號</title>
     <link rel="icon" type="image/png" href="/static/cover_egg.png">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { font-family: "Microsoft JhengHei", sans-serif; background-color: #f0f2f5; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
-        .container { background: white; padding: 40px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); text-align: center; width: 100%; max-width: 400px; }
-        h2 { color: #1a73e8; }
-        input { padding: 12px; width: 100%; margin: 10px 0 20px 0; border: 2px solid #e0e0e0; border-radius: 8px; box-sizing: border-box; }
-        button { padding: 12px; width: 100%; background: #34A853; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        /* --- 全局日系暖色風格 --- */
+        body { 
+            font-family: "Microsoft JhengHei", "Hiragino Sans GB", sans-serif; 
+            background-color: #f9f7f2; /* 米白背景 */
+            color: #595755; /* 暖深灰文字 */
+            margin: 0; 
+            padding: 0; 
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center; /* 垂直水平置中 */
+        }
+
+        /* --- Loading 過場動畫 (與其他頁面一致) --- */
+        #loading-screen {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: #f9f7f2;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 0.6s ease-out, visibility 0.6s ease-out;
+        }
+
+        .loading-egg {
+            width: 50px; height: 60px;
+            background-color: #6a8ecf; /* 柔和藍 */
+            border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+            animation: breathe 1.5s infinite ease-in-out;
+            box-shadow: 0 10px 20px rgba(106, 142, 207, 0.3);
+        }
+
+        @keyframes breathe {
+            0%, 100% { transform: scale(0.9); opacity: 0.8; }
+            50% { transform: scale(1.1); opacity: 1; }
+        }
+
+        .loading-text {
+            margin-top: 20px;
+            color: #8e8071;
+            font-size: 0.9em;
+            letter-spacing: 2px;
+            font-weight: bold;
+            animation: fadeIn 1.5s infinite alternate;
+        }
+
+        .hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+
+        /* --- 註冊卡片 --- */
+        .register-card {
+            background: #ffffff;
+            width: 100%;
+            max-width: 400px;
+            padding: 40px 35px;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(163, 148, 133, 0.15);
+            text-align: center;
+            border: 1px solid #f0ebe5;
+            transform: translateY(20px);
+            opacity: 0;
+            animation: slideUpFade 0.8s ease-out forwards 0.5s;
+        }
+
+        @keyframes slideUpFade {
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .logo-img {
+            width: 80px;
+            height: auto;
+            margin-bottom: 20px;
+            filter: drop-shadow(0 4px 6px rgba(163, 148, 133, 0.2));
+            animation: float 3s ease-in-out infinite; /* 輕微漂浮動畫 */
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+
+        h2 {
+            font-size: 1.5em;
+            color: #4a4a4a;
+            margin: 0 0 10px 0;
+            font-weight: 600;
+        }
+
+        p {
+            color: #888;
+            font-size: 0.95em;
+            line-height: 1.5;
+            margin-bottom: 25px;
+        }
+
+        .email-display {
+            background-color: #fcfbf9;
+            color: #6a8ecf;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            display: inline-block;
+            margin-bottom: 25px;
+            border: 1px solid #e0dcd5;
+            font-weight: bold;
+        }
+
+        /* --- 表單樣式 --- */
+        .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #595755;
+            font-weight: bold;
+            font-size: 0.95em;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e0dcd5;
+            border-radius: 8px;
+            font-size: 1em;
+            color: #4a4a4a;
+            box-sizing: border-box; /* 確保 padding 不會撐大寬度 */
+            transition: border-color 0.2s, box-shadow 0.2s;
+            background-color: #faf9f7;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #6a8ecf;
+            box-shadow: 0 0 0 3px rgba(106, 142, 207, 0.1);
+            background-color: #ffffff;
+        }
+
+        .btn-submit {
+            background-color: #6a8ecf;
+            color: white;
+            border: none;
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 4px 10px rgba(106, 142, 207, 0.3);
+            margin-top: 10px;
+        }
+
+        .btn-submit:hover {
+            background-color: #5a7ebf;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(106, 142, 207, 0.4);
+        }
+
+        .link-cancel {
+            display: block;
+            margin-top: 20px;
+            color: #aaa;
+            text-decoration: none;
+            font-size: 0.9em;
+            transition: color 0.2s;
+        }
+
+        .link-cancel:hover {
+            color: #8e8071;
+            text-decoration: underline;
+        }
+
     </style>
 </head>
 <body>
-    <div class="container">
-        <h2>🔗 連結您的學籍資料</h2>
-        <p style="color: #666;">歡迎！<b>{{ .Email }}</b></p>
-        <p style="font-size: 0.9em; color: #888;">請輸入學號，系統將自動從修課名單中對應您的班級。</p>
-        
-        <form action="/register" method="POST"> <input type="text" name="student_id" required placeholder="請輸入學號 (如: 110360101)" autofocus>
-            <button type="submit">確認並綁定身分</button>
-        </form>
+
+    <div id="loading-screen">
+        <div class="loading-egg"></div>
+        <div class="loading-text">LOADING</div>
     </div>
+
+    <div class="register-card">
+        <img src="/static/cover_egg.png" alt="Logo" class="logo-img">
+        
+        <h2>綁定學號</h2>
+        
+        <div class="email-display">
+            {{ .Email }}
+        </div>
+        
+        <p>初次登入，請輸入您的學號以完成綁定。<br>輸入後將無法自行更改。</p>
+        
+        <form action="/register" method="POST">
+            <div class="form-group">
+                <label for="student_id">請輸入學號 (Student ID)</label>
+                <input type="text" id="student_id" name="student_id" placeholder="例如：110360001" required autocomplete="off">
+            </div>
+            
+            <button type="submit" class="btn-submit">確認綁定</button>
+        </form>
+        
+        <a href="/logout" class="link-cancel">取消並登出</a>
+    </div>
+
+    <script>
+        // 過場動畫邏輯
+        window.addEventListener('load', function() {
+            const loader = document.getElementById('loading-screen');
+            setTimeout(() => {
+                loader.classList.add('hidden');
+            }, 500);
+        });
+    </script>
+
 </body>
 </html>
