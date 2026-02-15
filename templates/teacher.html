@@ -1,169 +1,446 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>管理 - {{ .Subject }}</title>
+    <title>課程管理 - {{ .Subject }}</title>
     <link rel="icon" type="image/png" href="/static/cover_egg.png">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { font-family: "Microsoft JhengHei", sans-serif; background-color: #f8f9fa; margin: 0; color: #333; }
-        .top-bar { background: #fff; padding: 15px 30px; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; justify-content: space-between; }
-        .breadcrumb { display: flex; align-items: center; gap: 10px; font-size: 1.1rem; }
-        .breadcrumb a { text-decoration: none; color: #5f6368; padding: 5px 10px; border-radius: 4px; transition: 0.2s; }
-        .breadcrumb a:hover { background-color: #f1f3f4; color: #202124; }
-        .current-subject { font-weight: bold; color: #1a73e8; background: #e8f0fe; padding: 5px 12px; border-radius: 20px; }
-        .container { max-width: 1200px; margin: 30px auto; padding: 0 20px; display: grid; grid-template-columns: 350px 1fr; gap: 30px; }
-        .panel { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 20px; height: fit-content; }
-        .panel h3 { margin-top: 0; color: #202124; border-bottom: 2px solid #f1f3f4; padding-bottom: 15px; font-size: 1.1rem; }
-        .upload-section { margin-bottom: 30px; }
-        .section-title { font-weight: bold; color: #444; margin-bottom: 5px; display: block; }
-        .section-desc { font-size: 0.85em; color: #666; margin-bottom: 10px; line-height: 1.4; }
-        .upload-area { border: 2px dashed #dadce0; border-radius: 8px; padding: 15px; text-align: center; margin-bottom: 10px; transition: 0.2s; background: #fafafa; }
-        .upload-area:hover { border-color: #1a73e8; background: #f8faff; }
-        .btn-primary { background: #1a73e8; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 0.95rem; transition: 0.2s; font-weight: bold; }
-        .btn-secondary { background: #2c3e50; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 0.95rem; transition: 0.2s; font-weight: bold; }
-        .btn-danger { background: white; color: #d93025; border: 1px solid #d93025; padding: 8px; width: 100%; border-radius: 4px; cursor: pointer; transition: 0.2s; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; background: white; border-radius: 8px; overflow: hidden; margin-bottom: 30px; border: 1px solid #e0e0e0; }
-        th { background-color: #f8f9fa; color: #5f6368; text-align: left; padding: 12px 15px; border-bottom: 2px solid #e0e0e0; font-size: 0.95rem; }
-        td { padding: 12px 15px; border-bottom: 1px solid #f1f3f4; font-size: 0.95rem; vertical-align: middle; }
-        tr:hover { background-color: #f8faff; }
-        .status-badge { padding: 4px 10px; border-radius: 12px; font-size: 0.85em; font-weight: bold; }
-        .status-ok { background-color: #e6f4ea; color: #137333; }
-        .status-missing { background-color: #fce8e6; color: #c5221f; }
-        @media (max-width: 900px) { .container { grid-template-columns: 1fr; } }
+        /* --- 全局日系暖色風格 --- */
+        body { 
+            font-family: "Microsoft JhengHei", "Hiragino Sans GB", sans-serif; 
+            background-color: #f9f7f2; /* 米白背景 */
+            color: #595755; /* 暖深灰文字 */
+            margin: 0; 
+            padding: 0; 
+            min-height: 100vh;
+        }
+
+        /* --- Loading 過場動畫 --- */
+        #loading-screen {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: #f9f7f2;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 0.6s ease-out, visibility 0.6s ease-out;
+        }
+
+        .loading-egg {
+            width: 50px; height: 60px;
+            background-color: #6a8ecf;
+            border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+            animation: breathe 1.5s infinite ease-in-out;
+            box-shadow: 0 10px 20px rgba(106, 142, 207, 0.3);
+        }
+
+        @keyframes breathe {
+            0%, 100% { transform: scale(0.9); opacity: 0.8; }
+            50% { transform: scale(1.1); opacity: 1; }
+        }
+
+        .loading-text {
+            margin-top: 20px;
+            color: #8e8071;
+            font-size: 0.9em;
+            letter-spacing: 2px;
+            font-weight: bold;
+            animation: fadeIn 1.5s infinite alternate;
+        }
+
+        .hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+
+        /* --- 頂部導覽列 --- */
+        .top-bar {
+            background: #ffffff;
+            padding: 15px 40px;
+            border-bottom: 1px solid #f0ebe5;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 10px rgba(163, 148, 133, 0.05);
+        }
+
+        .breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1rem;
+            color: #888;
+        }
+
+        .breadcrumb a {
+            text-decoration: none;
+            color: #8e8071;
+            font-weight: bold;
+            transition: color 0.2s;
+        }
+        .breadcrumb a:hover { color: #5f6368; }
+
+        .current-subject {
+            background: #eef3fc;
+            color: #6a8ecf;
+            padding: 4px 12px;
+            border-radius: 15px;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+
+        /* --- 佈局容器 --- */
+        .container {
+            max-width: 1200px;
+            margin: 30px auto;
+            padding: 0 20px;
+            display: grid;
+            grid-template-columns: 350px 1fr; /* 左側工具，右側列表 */
+            gap: 30px;
+        }
+
+        /* --- 卡片樣式 --- */
+        .card {
+            background: #ffffff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(163, 148, 133, 0.15);
+            border: 1px solid #f0ebe5;
+            height: fit-content;
+        }
+
+        h3 {
+            margin-top: 0;
+            color: #4a4a4a;
+            border-bottom: 2px solid #f2efea;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        /* --- 上傳區塊 --- */
+        .upload-section { margin-bottom: 35px; }
+        
+        .section-title {
+            font-weight: bold;
+            color: #6a8ecf; /* 柔和藍強調標題 */
+            margin-bottom: 8px;
+            display: block;
+        }
+        
+        .section-desc {
+            font-size: 0.9em;
+            color: #999;
+            margin-bottom: 12px;
+            line-height: 1.5;
+        }
+        
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: #d66;
+            font-family: monospace;
+        }
+
+        .upload-area {
+            border: 2px dashed #e0dcd5;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+            margin-bottom: 12px;
+            transition: 0.2s;
+            background: #faf9f7;
+        }
+        .upload-area:hover {
+            border-color: #6a8ecf;
+            background: #fff;
+        }
+        
+        input[type="file"] { width: 100%; color: #666; font-size: 0.9em; }
+
+        /* --- 按鈕樣式 --- */
+        button {
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            width: 100%;
+            font-size: 0.95rem;
+            font-weight: bold;
+            transition: all 0.2s;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .btn-primary { /* 上傳成績 - 藍 */
+            background: #6a8ecf;
+            color: white;
+        }
+        .btn-primary:hover { background: #5a7ebf; transform: translateY(-2px); }
+
+        .btn-secondary { /* 上傳名單 - 棕灰 */
+            background: #8e8071;
+            color: white;
+        }
+        .btn-secondary:hover { background: #756a5d; transform: translateY(-2px); }
+
+        /* 危險操作區 */
+        .danger-zone {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px dashed #e0dcd5;
+        }
+        .danger-title {
+            display: block;
+            color: #d9534f; /* 柔和紅 */
+            font-weight: bold;
+            margin-bottom: 15px;
+            font-size: 0.95em;
+        }
+        
+        .btn-danger {
+            background: white;
+            color: #d9534f;
+            border: 1px solid #d9534f;
+            margin-bottom: 10px;
+            box-shadow: none;
+        }
+        .btn-danger:hover {
+            background: #d9534f;
+            color: white;
+        }
+
+        /* --- 表格樣式 --- */
+        .table-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .table-title { font-weight: bold; color: #4a4a4a; font-size: 1.1rem; }
+        .table-count { font-size: 0.9em; color: #999; background: #f4f4f4; padding: 2px 8px; border-radius: 10px; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 30px;
+            border: 1px solid #f0ebe5;
+        }
+        
+        th {
+            background-color: #faf9f7;
+            color: #888;
+            text-align: left;
+            padding: 12px 15px;
+            border-bottom: 1px solid #f0ebe5;
+            font-size: 0.9rem;
+            font-weight: normal;
+        }
+        
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #f9f7f2;
+            font-size: 0.95rem;
+            vertical-align: middle;
+            color: #555;
+        }
+        
+        tr:last-child td { border-bottom: none; }
+        tr:hover { background-color: #fcfbf9; }
+
+        /* 狀態標籤 */
+        .status-badge {
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.85em;
+            font-weight: bold;
+            display: inline-block;
+        }
+        .status-ok {
+            background-color: #ebfbee; /* 淡綠 */
+            color: #4caf50;
+        }
+        .status-missing {
+            background-color: #fff0f0; /* 淡紅 */
+            color: #e57373;
+        }
+
+        /* 小刪除按鈕 */
+        .btn-sm-delete {
+            background: transparent;
+            color: #ccc;
+            border: none;
+            padding: 5px;
+            width: auto;
+            box-shadow: none;
+            font-size: 0.9em;
+        }
+        .btn-sm-delete:hover {
+            color: #d9534f;
+            background: transparent;
+            transform: scale(1.1);
+        }
+
+        @media (max-width: 900px) { 
+            .container { grid-template-columns: 1fr; } 
+        }
     </style>
 </head>
 <body>
+
+    <div id="loading-screen">
+        <div class="loading-egg"></div>
+        <div class="loading-text">LOADING</div>
+    </div>
+
     <div class="top-bar">
         <div class="breadcrumb">
-            <a href="/">🏠 課程大廳</a>
-            <span style="color:#dadce0">/</span>
+            <a href="/">課程大廳</a>
+            <span>/</span>
             <span class="current-subject">{{ .Subject }}</span>
         </div>
-        <div style="font-size: 0.9em; color: #5f6368;">
-            目前模式: <b>{{ if .IsAdmin }}👨‍🏫 管理員後台{{ else }}單一課程後台{{ end }}</b>
+        <div style="font-size: 0.9em; color: #888;">
+            模式：{{ if .IsAdmin }}管理員後台{{ else }}單一課程後台{{ end }}
         </div>
     </div>
 
     <div class="container">
-        <div class="panel">
-            <h3>🛠️ 課程管理工具</h3>
+        
+        <div class="card">
+            <h3>課程管理工具</h3>
+            
             <div class="upload-section">
-                <span class="section-title">📋 步驟 1：匯入修課名單</span>
+                <span class="section-title">步驟 1：匯入修課名單</span>
                 <p class="section-desc">
-                    請上傳學生名單。<br>
-                    CSV 格式：<code>No., Class, ID</code>
+                    請上傳學生名單以建立班級資料。<br>
+                    CSV 欄位：<code>No.</code>, <code>Class</code>, <code>ID</code>
                 </p>
                 <form action="/teacher/upload-roster" method="POST" enctype="multipart/form-data">
                     {{ if .IsAdmin }}<input type="hidden" name="subject" value="{{ .Subject }}">{{ end }}
                     <div class="upload-area">
-                        <input type="file" name="roster_file" accept=".csv" required style="width: 100%;">
+                        <input type="file" name="roster_file" accept=".csv" required>
                     </div>
-                    <button type="submit" class="btn-secondary">📤 上傳名單</button>
+                    <button type="submit" class="btn-secondary">上傳名單</button>
                 </form>
             </div>
 
-            <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+            <hr style="border: 0; border-top: 1px solid #f2efea; margin: 25px 0;">
 
             <div class="upload-section">
-                <span class="section-title">📊 步驟 2：匯入成績資料</span>
+                <span class="section-title">步驟 2：匯入成績資料</span>
                 <p class="section-desc">
-                    CSV 格式需包含：<code>ID</code> 欄位。
+                    系統將自動比對學號進行匯入。<br>
+                    CSV 需包含：<code>ID</code> 欄位。
                 </p>
                 <form action="/teacher/upload" method="POST" enctype="multipart/form-data">
                     {{ if .IsAdmin }}<input type="hidden" name="subject" value="{{ .Subject }}">{{ end }}
                     <div class="upload-area">
-                        <input type="file" name="csv_file" accept=".csv" required style="width: 100%;">
+                        <input type="file" name="csv_file" accept=".csv" required>
                     </div>
-                    <button type="submit" class="btn-primary">🚀 上傳成績</button>
+                    <button type="submit" class="btn-primary">上傳成績</button>
                 </form>
             </div>
 
             <div class="danger-zone">
-                <span class="danger-title">⚠️ 危險操作區域</span>
+                <span class="danger-title">進階 / 危險操作</span>
                 
-                <form action="/teacher/delete-roster" method="POST" onsubmit="return confirm('🧨 嚴重警告：\n\n確定要刪除 [{{ .Subject }}] 的修課名單嗎？\n\n這不會刪除已上傳的成績，但會影響成績上傳的驗證！');" style="margin-bottom: 10px;">
+                <form action="/teacher/delete-roster" method="POST" onsubmit="return confirm('警告：\n\n確定要刪除 [{{ .Subject }}] 的修課名單嗎？\n\n這不會刪除已上傳的成績，但會影響成績上傳的驗證！');" style="margin-bottom: 10px;">
                     {{ if .IsAdmin }}<input type="hidden" name="subject" value="{{ .Subject }}">{{ end }}
-                    <button type="submit" class="btn-danger">🗑️ 清空修課名單</button>
+                    <button type="submit" class="btn-danger">清空修課名單</button>
                 </form>
 
-                <form action="/teacher/delete-all" method="POST" onsubmit="return confirm('🧨 嚴重警告：\n\n確定要清空 [{{ .Subject }}] 的所有成績資料嗎？\n\n此動作無法復原！');">
+                <form action="/teacher/delete-all" method="POST" onsubmit="return confirm('嚴重警告：\n\n確定要清空 [{{ .Subject }}] 的所有成績資料嗎？\n\n此動作無法復原！');">
                     {{ if .IsAdmin }}<input type="hidden" name="subject" value="{{ .Subject }}">{{ end }}
-                    <button type="submit" class="btn-danger">💣 清空本科目成績</button>
+                    <button type="submit" class="btn-danger">清空所有成績</button>
                 </form>
             </div>
         </div>
 
         <div style="flex: 1;">
             
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <h3 style="margin: 0; color: #202124;">📋 修課名單與註冊狀態</h3>
-                <span style="font-size: 0.9em; color: #666;">共 {{ len .RosterList }} 人</span>
+            <div class="table-header">
+                <span class="table-title">修課名單與註冊狀態</span>
+                <span class="table-count">{{ len .RosterList }} 人</span>
             </div>
             
             <table>
                 <thead>
                     <tr>
                         <th style="width: 50px;">#</th>
-                        <th>班級 (Class)</th>
-                        <th>學號 (Student ID)</th>
-                        <th>姓名 (Name)</th>
-                        <th>註冊 Email (Registered Email)</th>
+                        <th>班級</th>
+                        <th>學號 (ID)</th>
+                        <th>姓名</th>
+                        <th>註冊狀態</th>
                     </tr>
                 </thead>
                 <tbody>
                     {{ range $index, $r := .RosterList }}
                     <tr>
-                        <td style="color: #999;">{{ inc $index }}</td>
+                        <td style="color: #ccc;">{{ inc $index }}</td>
                         <td>{{ .Class }}</td>
-                        <td><b>{{ .StudentID }}</b></td>
+                        <td style="font-weight: bold; color: #4a4a4a;">{{ .StudentID }}</td>
                         <td>{{ .Name }}</td>
                         <td>
                             {{ if .Email }}
-                                <span class="status-badge status-ok">✅ {{ .Email }}</span>
+                                <span class="status-badge status-ok">已註冊</span>
+                                <span style="font-size:0.8em; color:#999; margin-left:5px;">{{ .Email }}</span>
                             {{ else }}
-                                <span class="status-badge status-missing">❌ 尚未註冊</span>
+                                <span class="status-badge status-missing">未註冊</span>
                             {{ end }}
                         </td>
                     </tr>
                     {{ else }}
-                    <tr><td colspan="5" style="text-align:center; padding: 30px; color: #999;">尚未上傳修課名單</td></tr>
+                    <tr><td colspan="5" style="text-align:center; padding: 40px; color: #aaa;">尚未上傳修課名單</td></tr>
                     {{ end }}
                 </tbody>
             </table>
 
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; margin-top: 40px;">
-                <h3 style="margin: 0; color: #202124;">📊 已上傳成績列表</h3>
-                <span style="font-size: 0.9em; color: #666;">共 {{ len .AllGrades }} 筆紀錄</span>
+            <div class="table-header" style="margin-top: 40px;">
+                <span class="table-title">已上傳成績列表</span>
+                <span class="table-count">{{ len .AllGrades }} 筆</span>
             </div>
 
             <table>
                 <thead>
                     <tr>
                         <th>學號 (ID)</th>
-                        <th>項目</th>
+                        <th>評量項目</th>
                         <th>分數</th>
-                        <th>操作</th>
+                        <th style="width: 60px; text-align: center;">操作</th>
                     </tr>
                 </thead>
                 <tbody>
                     {{ range .AllGrades }}
                     <tr>
-                        <td><b>{{ .StudentID }}</b></td>
+                        <td style="font-weight: bold; color: #4a4a4a;">{{ .StudentID }}</td>
                         <td>{{ .ItemName }}</td>
-                        <td><b>{{ .Score }}</b></td>
-                        <td>
+                        <td style="font-weight: bold; color: #6a8ecf;">{{ .Score }}</td>
+                        <td style="text-align: center;">
                             <form action="/teacher/delete/{{.ID}}" method="POST" style="margin:0;">
-                                <button type="submit" class="btn-sm-delete">🗑️</button>
+                                <button type="submit" class="btn-sm-delete" title="刪除此筆成績">刪除</button>
                             </form>
                         </td>
                     </tr>
                     {{ else }}
-                    <tr><td colspan="4" style="text-align:center; padding: 20px;">暫無成績資料</td></tr>
+                    <tr><td colspan="4" style="text-align:center; padding: 40px; color: #aaa;">暫無成績資料</td></tr>
                     {{ end }}
                 </tbody>
             </table>
         </div>
     </div>
+
+    <script>
+        // 過場動畫邏輯
+        window.addEventListener('load', function() {
+            const loader = document.getElementById('loading-screen');
+            setTimeout(() => {
+                loader.classList.add('hidden');
+            }, 500);
+        });
+    </script>
 </body>
 </html>
