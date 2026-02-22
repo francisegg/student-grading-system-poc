@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"fmt"
 	"grade-system/initializers"
 	"grade-system/models"
 	"grade-system/utils"
@@ -165,11 +166,11 @@ func ShowMyGrades(c *gin.Context) {
 	initializers.DB.Scopes(utils.FilterSubject).First(&s, uid)
 
 	// 2. 直接從名單 (Roster) 獲取最新的班級資訊，確保資料正確
-	var currentRoster models.Roster
-	targetClass := s.Class
-	if err := initializers.DB.Where("student_id = ? AND subject = ?", s.StudentID, initializers.CurrentSubject).First(&currentRoster).Error; err == nil {
-		targetClass = currentRoster.Class
-	}
+	// var currentRoster models.Roster
+	// targetClass := s.Class
+	// if err := initializers.DB.Where("student_id = ? AND subject = ?", s.StudentID, initializers.CurrentSubject).First(&currentRoster).Error; err == nil {
+	// 	targetClass = currentRoster.Class
+	// }
 
 	// 檢查該科目是否有成績
 	var globalGradeCount int64
@@ -184,7 +185,7 @@ func ShowMyGrades(c *gin.Context) {
 		return
 	}
 
-	// 3. 抓取該學生的成績明細 (用於列表顯示)
+// 3. 抓取該學生的成績明細 (用於列表顯示)
 	var displayGrades []models.Grade
 	initializers.DB.Scopes(utils.FilterSubject).
 		Where("student_id = ?", s.StudentID).
@@ -192,34 +193,86 @@ func ShowMyGrades(c *gin.Context) {
 		Order("id asc").
 		Find(&displayGrades)
 
-	var myTotalGrade models.Grade
-	var classTotals []float64
-
-	type Result struct {
-		StudentID string
-		Score     float64
+	// --- 新增：處理學生個人的期末考動態權重 ---
+	preFinalTotal := 0.0
+	finalIdx := -1
+	for i, g := range displayGrades {
+		// ⚠️ 假設您的 CSV 期末考欄位名稱為 "Final" 或 "期末考" (不分大小寫)
+		if strings.EqualFold(g.ItemName, "Final") || strings.EqualFold(g.ItemName, "期末考") {
+			finalIdx = i
+		} else {
+			preFinalTotal += g.Score
+		}
 	}
-	var results []Result
 
-	// 4. 計算全班成績分佈 (改為 JOIN rosters 確保包含所有人)
+	if finalIdx != -1 {
+		// 期末考佔比 = 100 - 先前總分
+		fWeight := 100.0 - preFinalTotal
+		if fWeight < 0 {
+			fWeight = 0
+		}
+		rawFinal := displayGrades[finalIdx].Score
+		weightedFinal := rawFinal * (fWeight / 100.0)
+
+		// 覆寫顯示名稱與分數，讓學生能在畫面上看懂計算過程
+		displayGrades[finalIdx].ItemName = fmt.Sprintf("%s (原始:%g, 佔比:%.1f%%)", displayGrades[finalIdx].ItemName, rawFinal, fWeight)
+		// 四捨五入到小數點第二位
+		displayGrades[finalIdx].Score = math.Round(weightedFinal*100) / 100
+	}
+
+	// 4. 計算全班成績分佈 (改在 Go 程式中運算，以支援動態權重)
+	var allClassGrades []models.Grade
 	initializers.DB.Table("grades").
-		Select("grades.student_id, SUM(grades.score) as score").
+		Select("grades.*").
 		Joins("JOIN rosters ON rosters.student_id = grades.student_id").
 		Where("grades.subject = ?", initializers.CurrentSubject).
 		Where("grades.item_name NOT IN ?", IgnoredGradeItems).
 		Where("rosters.subject = ?", initializers.CurrentSubject).
-		Where("rosters.class = ?", targetClass).
-		Group("grades.student_id").
-		Scan(&results)
+		// Where("rosters.class = ?", targetClass).
+		Find(&allClassGrades)
 
-	// 尋找自己的總分
-	for _, r := range results {
-		classTotals = append(classTotals, r.Score)
-		if r.StudentID == s.StudentID {
-			myTotalGrade.Score = r.Score
+	// 分類每個學生的平時成績與期末考成績
+	studentPreFinal := make(map[string]float64)
+	studentFinalRaw := make(map[string]float64)
+	studentHasFinal := make(map[string]bool)
+
+	for _, g := range allClassGrades {
+		if strings.EqualFold(g.ItemName, "Final") || strings.EqualFold(g.ItemName, "期末考") {
+			studentFinalRaw[g.StudentID] = g.Score
+			studentHasFinal[g.StudentID] = true
+		} else {
+			studentPreFinal[g.StudentID] += g.Score
 		}
 	}
-	myTotal := myTotalGrade.Score
+
+	var classTotals []float64
+	myTotal := 0.0
+
+	// 彙整每個人的最終總分
+	studentIDsMap := make(map[string]bool)
+	for _, g := range allClassGrades {
+		studentIDsMap[g.StudentID] = true
+	}
+
+	for sid := range studentIDsMap {
+		pre := studentPreFinal[sid]
+		total := pre
+		// 如果該學生有考期末考，則加上計算後的期末考分數
+		if studentHasFinal[sid] {
+			weight := 100.0 - pre
+			if weight < 0 {
+				weight = 0
+			}
+			total += studentFinalRaw[sid] * (weight / 100.0)
+		}
+
+		total = math.Round(total*100) / 100 // 四捨五入到小數點第二位
+
+		classTotals = append(classTotals, total)
+		if sid == s.StudentID {
+			myTotal = total
+		}
+	}
 
 	// --- 統計計算 ---
 	sum := 0.0
@@ -280,7 +333,7 @@ func ShowMyGrades(c *gin.Context) {
 		top3 = append(top3, classTotals[i])
 	}
 
-	finalWeight := 100.0 - myTotal
+	finalWeight := 100.0 - preFinalTotal
 	if finalWeight < 0 {
 		finalWeight = 0
 	}
