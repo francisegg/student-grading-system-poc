@@ -1,0 +1,13 @@
+DB_HOST=XXX
+DB_USER=XXX
+DB_PASSWORD=XXX
+DB_NAME=XXX
+DB_PORT=XXX
+
+# Google OAuth 資訊 (請確保與 Google Console 一致)
+GOOGLE_CLIENT_ID=XXX.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=XXX
+GOOGLE_REDIRECT_URL=http://XXX/auth/callback
+SESSION_SECRET=XXX
+
+TEACHER_WHITELIST=XXX@XXX.com #開放通行的Email，逗號分隔
