@@ -5,11 +5,11 @@ import "gorm.io/gorm"
 // Student 代表學生帳號資訊
 type Student struct {
     gorm.Model
-    StudentID string `gorm:"uniqueIndex"` // 學號
-    Name      string                       // 學生姓名
-    Class     string                       // 班級 (對應 CSV 的 Class)
-    Email     string `gorm:"uniqueIndex"` // Google Email
-    Subject   string `gorm:"index"`        // 所屬科目 (例如 circuit)
+    StudentID string `gorm:"uniqueIndex:idx_sid_subject"` 
+    Name      string                       
+    Class     string                       
+    Email     string `gorm:"uniqueIndex:idx_email_subject"` 
+    Subject   string `gorm:"uniqueIndex:idx_sid_subject;uniqueIndex:idx_email_subject"` 
 }
 
 type Grade struct {

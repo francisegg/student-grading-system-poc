@@ -53,12 +53,22 @@ func main() {
 	teacher := r.Group("/teacher")
 	teacher.Use(middleware.RequireTeacher)
 	{
-		teacher.GET("/dashboard", controllers.TeacherDashboard)
+teacher.GET("/dashboard", controllers.TeacherDashboard)
 		teacher.POST("/upload", controllers.UploadGrades)
 		teacher.POST("/upload-roster", controllers.UploadRoster)
-		teacher.POST("/delete-roster", controllers.DeleteRoster)
-		teacher.POST("/delete-all", controllers.DeleteAllGrades)
-		teacher.POST("/delete/:id", controllers.DeleteGrade)
+		
+		// 手動管理路由
+		teacher.POST("/roster/post", controllers.PostRoster)
+		teacher.GET("/roster/delete", controllers.DeleteRoster)
+		teacher.POST("/grade/post", controllers.PostGrade)
+		teacher.GET("/grade/delete", controllers.DeleteGrade)
+
+		// 批次清空路由 (請對應到新的函式名)
+		// 在 teacher 路由組內
+		teacher.GET("/roster/delete-one", controllers.DeleteSingleRoster) // 單筆刪除
+		teacher.POST("/delete-roster", controllers.ClearRoster)           // 批次清空
+
+		teacher.GET("/student/unbind", controllers.UnbindStudentEmail)
 	}
 
 	r.Run(":8080")

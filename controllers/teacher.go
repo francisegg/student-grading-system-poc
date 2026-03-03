@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"encoding/csv"
-	"fmt"
 	"grade-system/initializers"
 	"grade-system/models"
 	"grade-system/utils"
@@ -15,6 +14,7 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+// TeacherDashboard 顯示管理介面
 func TeacherDashboard(c *gin.Context) {
 	targetSubject := initializers.CurrentSubject
 	if initializers.IsAdminMode {
@@ -44,13 +44,15 @@ func TeacherDashboard(c *gin.Context) {
 		Scan(&rosterRows)
 
 	c.HTML(200, "teacher.html", gin.H{
-		"AllGrades":   allGrades,
-		"RosterList":  rosterRows,
-		"Subject":     targetSubject,
-		"AppName":     initializers.AppName,
-		"IsAdmin":     initializers.IsAdminMode,
+		"AllGrades":  allGrades,
+		"RosterList": rosterRows,
+		"Subject":    targetSubject,
+		"AppName":    initializers.AppName,
+		"IsAdmin":    initializers.IsAdminMode,
 	})
 }
+
+// --- 批次匯入功能 (CSV) ---
 
 func UploadGrades(c *gin.Context) {
 	targetSubject := initializers.CurrentSubject
@@ -74,23 +76,15 @@ func UploadGrades(c *gin.Context) {
 		c.String(400, "CSV 讀取失敗")
 		return
 	}
-	if len(records) < 2 {
-		c.String(400, "無數據")
-		return
-	}
 
 	var validStudentIDs []string
 	initializers.DB.Model(&models.Roster{}).Where("subject = ?", targetSubject).Pluck("student_id", &validStudentIDs)
 	validStudentMap := make(map[string]bool)
 	for _, id := range validStudentIDs {
-		validStudentMap[id] = true
+		validStudentMap[utils.CleanID(id)] = true
 	}
 
 	header := records[0]
-	if len(header) > 0 {
-		header[0] = strings.TrimPrefix(header[0], "\ufeff")
-	}
-
 	idIndex := -1
 	for i, colName := range header {
 		cleanName := strings.ToLower(utils.CleanHeader(colName))
@@ -101,52 +95,26 @@ func UploadGrades(c *gin.Context) {
 	}
 
 	if idIndex == -1 {
-		c.String(400, fmt.Sprintf("❌ 找不到 'ID' 欄位，請檢查 CSV 標題。偵測到的標題: %v", header))
+		c.String(400, "❌ 找不到 ID 欄位")
 		return
 	}
 
-	ignoreCols := map[string]bool{
-		"No.": true, "No": true, "class": true, "id": true, "grade": true,
-		"weight of final exam (%)": true,
-	}
-
-	successCount := 0
-	skippedCount := 0
+	successCount, skippedCount := 0, 0
+	ignoreCols := map[string]bool{"No.": true, "No": true, "class": true, "id": true, "grade": true}
 
 	for i, row := range records {
-		if i == 0 {
-			continue
-		}
-		if len(row) <= idIndex {
-			continue
-		}
-		studentID := strings.TrimSpace(row[idIndex])
-		if studentID == "" {
-			continue
-		}
-
-		if !validStudentMap[studentID] {
+		if i == 0 || len(row) <= idIndex { continue }
+		studentID := utils.CleanID(row[idIndex])
+		if studentID == "" || !validStudentMap[studentID] {
 			skippedCount++
 			continue
 		}
 
 		for colIdx, cellValue := range row {
 			colName := utils.CleanHeader(header[colIdx])
-			if ignoreCols[colName] || ignoreCols[strings.ToLower(colName)] {
-				continue
-			}
+			if ignoreCols[colName] || ignoreCols[strings.ToLower(colName)] { continue }
 
-			var score float64
-			cellValue = strings.TrimSpace(cellValue)
-			if cellValue == "" || strings.EqualFold(cellValue, "NaN") {
-				continue
-			}
-			if s, err := strconv.ParseFloat(cellValue, 64); err == nil {
-				score = s
-			} else {
-				score = 0
-			}
-
+			score, _ := strconv.ParseFloat(strings.TrimSpace(cellValue), 64)
 			initializers.DB.Clauses(clause.OnConflict{
 				Columns:   []clause.Column{{Name: "student_id"}, {Name: "item_name"}, {Name: "subject"}},
 				DoUpdates: clause.AssignmentColumns([]string{"score", "updated_at"}),
@@ -159,14 +127,8 @@ func UploadGrades(c *gin.Context) {
 			successCount++
 		}
 	}
-
-	log.Printf("匯入完成。寫入 %d 筆，略過 %d 筆。", successCount, skippedCount)
-
-	redirectUrl := "/teacher/dashboard"
-	if initializers.IsAdminMode {
-		redirectUrl += "?subject=" + targetSubject
-	}
-	c.Redirect(http.StatusSeeOther, redirectUrl)
+	log.Printf("匯入完成：寫入 %d 筆，略過 %d 筆。", successCount, skippedCount)
+	redirectBack(c, targetSubject)
 }
 
 func UploadRoster(c *gin.Context) {
@@ -175,115 +137,157 @@ func UploadRoster(c *gin.Context) {
 		targetSubject = c.PostForm("subject")
 	}
 
-	log.Println("--- 開始上傳名單 ---")
 	file, _ := c.FormFile("roster_file")
-	if file == nil {
-		c.String(400, "❌ 請選擇檔案")
-		return
-	}
 	f, _ := file.Open()
 	defer f.Close()
 
 	reader := csv.NewReader(f)
-	records, err := reader.ReadAll()
-	if err != nil {
-		c.String(400, "CSV 讀取失敗")
-		return
+	records, _ := reader.ReadAll()
+
+	classIndex, idIndex := 1, 2 // 預設值
+	for i, col := range records[0] {
+		cName := strings.ToLower(utils.CleanHeader(col))
+		if cName == "class" || cName == "班級" { classIndex = i }
+		if cName == "id" || cName == "學號" { idIndex = i }
 	}
 
-	classIndex := 1
-	idIndex := 2
-
-	header := records[0]
-	if len(header) > 0 {
-		header[0] = strings.TrimPrefix(header[0], "\ufeff")
-		for i, col := range header {
-			cName := strings.ToLower(utils.CleanHeader(col))
-			if cName == "class" || cName == "班級" {
-				classIndex = i
-			}
-			if cName == "id" || cName == "學號" || cName == "student_id" {
-				idIndex = i
-			}
-		}
-	}
-
-	successCount := 0
 	for i, row := range records {
-		if i == 0 {
-			continue
-		}
-		if len(row) <= idIndex || len(row) <= classIndex {
-			continue
-		}
-
+		if i == 0 || len(row) <= idIndex { continue }
+		sid := utils.CleanID(row[idIndex])
 		class := strings.TrimSpace(row[classIndex])
-		sid := strings.TrimSpace(row[idIndex])
-
-		if sid == "" {
-			continue
-		}
+		if sid == "" { continue }
 
 		initializers.DB.Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "student_id"}, {Name: "subject"}},
 			DoUpdates: clause.AssignmentColumns([]string{"class", "updated_at"}),
-		}).Create(&models.Roster{
-			StudentID: sid,
-			Class:     class,
-			Subject:   targetSubject,
-		})
-		successCount++
+		}).Create(&models.Roster{StudentID: sid, Class: class, Subject: targetSubject})
 	}
+	redirectBack(c, targetSubject)
+}
 
-	log.Printf("成功匯入 %d 筆名單資料。", successCount)
+// --- 手動單筆管理功能 (CRUD) ---
 
-	redirectUrl := "/teacher/dashboard"
-	if initializers.IsAdminMode {
-		redirectUrl += "?subject=" + targetSubject
+func PostRoster(c *gin.Context) {
+	targetSubject := getTargetSubject(c)
+	sid := utils.CleanID(c.PostForm("student_id"))
+	class := strings.TrimSpace(c.PostForm("class"))
+
+	if sid != "" {
+		initializers.DB.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "student_id"}, {Name: "subject"}},
+			DoUpdates: clause.AssignmentColumns([]string{"class", "updated_at"}),
+		}).Create(&models.Roster{StudentID: sid, Class: class, Subject: targetSubject})
 	}
-	c.Redirect(http.StatusSeeOther, redirectUrl)
+	redirectBack(c, targetSubject)
 }
 
 func DeleteRoster(c *gin.Context) {
 	targetSubject := initializers.CurrentSubject
-	if initializers.IsAdminMode {
-		targetSubject = c.PostForm("subject")
-	}
-
-	log.Printf("🗑️ 正在 [物理清空] %s 的修課名單...", targetSubject)
-	if err := initializers.DB.Unscoped().Where("subject = ?", targetSubject).Delete(&models.Roster{}).Error; err != nil {
-		c.String(500, "刪除失敗")
-		return
-	}
-
-	redirectUrl := "/teacher/dashboard"
-	if initializers.IsAdminMode {
-		redirectUrl += "?subject=" + targetSubject
-	}
-	c.Redirect(http.StatusSeeOther, redirectUrl)
+	sid := c.Query("student_id")
+	initializers.DB.Where("student_id = ? AND subject = ?", sid, targetSubject).Delete(&models.Roster{})
+	initializers.DB.Where("student_id = ? AND subject = ?", sid, targetSubject).Delete(&models.Grade{})
+	redirectBack(c, targetSubject)
 }
 
-func DeleteAllGrades(c *gin.Context) {
+func PostGrade(c *gin.Context) {
+	targetSubject := getTargetSubject(c)
+	sid := utils.CleanID(c.PostForm("student_id"))
+	itemName := strings.TrimSpace(c.PostForm("item_name"))
+	score, _ := strconv.ParseFloat(c.PostForm("score"), 64)
+
+	if sid != "" && itemName != "" {
+		initializers.DB.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "student_id"}, {Name: "item_name"}, {Name: "subject"}},
+			DoUpdates: clause.AssignmentColumns([]string{"score", "updated_at"}),
+		}).Create(&models.Grade{StudentID: sid, ItemName: itemName, Score: score, Subject: targetSubject})
+	}
+	redirectBack(c, targetSubject)
+}
+
+func DeleteGrade(c *gin.Context) {
+	targetSubject := initializers.CurrentSubject
+	sid := c.Query("student_id")
+	item := c.Query("item_name")
+	initializers.DB.Where("student_id = ? AND item_name = ? AND subject = ?", sid, item, targetSubject).Delete(&models.Grade{})
+	redirectBack(c, targetSubject)
+}
+
+// --- 批次清空功能 (危險區) ---
+
+// --- 修正：原有的清空功能 (改名以防混淆) ---
+func ClearRoster(c *gin.Context) {
 	targetSubject := initializers.CurrentSubject
 	if initializers.IsAdminMode {
 		targetSubject = c.PostForm("subject")
 	}
 
-	log.Printf("🗑️ 正在 [物理清空] %s 的所有成績...", targetSubject)
-	if err := initializers.DB.Unscoped().Where("subject = ?", targetSubject).Delete(&models.Grade{}).Error; err != nil {
-		c.String(500, "刪除失敗")
+	log.Printf("⚠️ 正在 [清空科目] %s 的所有名單...", targetSubject)
+	initializers.DB.Unscoped().Where("subject = ?", targetSubject).Delete(&models.Roster{})
+	
+	redirectBack(c, targetSubject)
+}
+
+func ClearAllGrades(c *gin.Context) {
+	targetSubject := getTargetSubject(c)
+	initializers.DB.Unscoped().Where("subject = ?", targetSubject).Delete(&models.Grade{})
+	redirectBack(c, targetSubject)
+}
+
+// --- 內部輔助函式 ---
+
+func getTargetSubject(c *gin.Context) string {
+	if initializers.IsAdminMode {
+		return c.PostForm("subject")
+	}
+	return initializers.CurrentSubject
+}
+
+func redirectBack(c *gin.Context, subject string) {
+	path := "/teacher/dashboard"
+	if initializers.IsAdminMode {
+		path += "?subject=" + subject
+	}
+	c.Redirect(http.StatusSeeOther, path)
+}
+
+// UnbindStudentEmail 移除學生的 Email 綁定 (不影響成績與名單)
+func UnbindStudentEmail(c *gin.Context) {
+	targetSubject := initializers.CurrentSubject
+	if initializers.IsAdminMode {
+		targetSubject = c.Query("subject")
+	}
+	
+	sid := c.Query("student_id")
+
+	// 僅從 students 資料表刪除紀錄，這會解除 Email 與學號的連結
+	// 使用 Unscoped() 是因為模型中使用了 gorm.Model，包含 DeletedAt 軟刪除
+	err := initializers.DB.Unscoped().
+		Where("student_id = ? AND subject = ?", sid, targetSubject).
+		Delete(&models.Student{}).Error
+
+	if err != nil {
+		log.Printf("移除綁定失敗: %v", err)
+	}
+
+	redirectBack(c, targetSubject)
+}
+
+// --- 修正：刪除單一學生 (名單與成績連帶刪除) ---
+func DeleteSingleRoster(c *gin.Context) {
+	targetSubject := initializers.CurrentSubject
+	if initializers.IsAdminMode {
+		targetSubject = c.Query("subject")
+	}
+	
+	sid := c.Query("student_id") // 從網址取得學號
+
+	if sid == "" {
+		c.String(400, "無效的學號")
 		return
 	}
 
-	redirectUrl := "/teacher/dashboard"
-	if initializers.IsAdminMode {
-		redirectUrl += "?subject=" + targetSubject
-	}
-	c.Redirect(http.StatusSeeOther, redirectUrl)
-}
-
-func DeleteGrade(c *gin.Context) {
-	id := c.Param("id")
-	initializers.DB.Scopes(utils.FilterSubject).Unscoped().Delete(&models.Grade{}, id)
-	c.Redirect(http.StatusSeeOther, c.Request.Header.Get("Referer"))
+	// 🌟 核心修正：必須加上 student_id 條件！
+	initializers.DB.Unscoped().Where("student_id = ? AND subject = ?", sid, targetSubject).Delete(&models.Roster{})
+	initializers.DB.Unscoped().Where("student_id = ? AND subject = ?", sid, targetSubject).Delete(&models.Grade{})
+	redirectBack(c, targetSubject)
 }
