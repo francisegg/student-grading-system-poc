@@ -5,7 +5,7 @@ import (
 	"grade-system/initializers"
 	"grade-system/models"
 	"grade-system/utils"
-	"log"
+	// "log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -36,10 +36,12 @@ func TeacherDashboard(c *gin.Context) {
 	}
 	var rosterRows []RosterRow
 
+	// 🌟 修正：確保 Join 的時候有比對 subject，且排除幽靈紀錄
 	initializers.DB.Table("rosters").
 		Select("rosters.class, rosters.student_id, rosters.name, students.email").
-		Joins("LEFT JOIN students ON students.student_id = rosters.student_id").
+		Joins("LEFT JOIN students ON students.student_id = rosters.student_id AND students.subject = rosters.subject AND students.deleted_at IS NULL").
 		Where("rosters.subject = ?", targetSubject).
+		Where("rosters.deleted_at IS NULL").
 		Order("rosters.class ASC, rosters.student_id ASC").
 		Scan(&rosterRows)
 
@@ -52,15 +54,13 @@ func TeacherDashboard(c *gin.Context) {
 	})
 }
 
-// --- 批次匯入功能 (CSV) ---
-
+// UploadGrades 處理成績 CSV
 func UploadGrades(c *gin.Context) {
 	targetSubject := initializers.CurrentSubject
 	if initializers.IsAdminMode {
 		targetSubject = c.PostForm("subject")
 	}
 
-	log.Println("--- 開始上傳成績 ---")
 	file, _ := c.FormFile("csv_file")
 	if file == nil {
 		c.String(400, "❌ 請選擇檔案")
@@ -99,38 +99,35 @@ func UploadGrades(c *gin.Context) {
 		return
 	}
 
-	successCount, skippedCount := 0, 0
-	ignoreCols := map[string]bool{"No.": true, "No": true, "class": true, "id": true, "grade": true}
+	// 🌟 修正：忽略欄位加入 "name" 和 "姓名"，防止變成成績項目！
+	ignoreCols := map[string]bool{"no.": true, "no": true, "class": true, "id": true, "grade": true, "name": true, "姓名": true}
 
 	for i, row := range records {
 		if i == 0 || len(row) <= idIndex { continue }
 		studentID := utils.CleanID(row[idIndex])
-		if studentID == "" || !validStudentMap[studentID] {
-			skippedCount++
-			continue
-		}
+		if studentID == "" || !validStudentMap[studentID] { continue }
 
 		for colIdx, cellValue := range row {
 			colName := utils.CleanHeader(header[colIdx])
-			if ignoreCols[colName] || ignoreCols[strings.ToLower(colName)] { continue }
+			if ignoreCols[strings.ToLower(colName)] { continue }
 
 			score, _ := strconv.ParseFloat(strings.TrimSpace(cellValue), 64)
+			// 加入 deleted_at 確保幽靈紀錄可以在這一步復活
 			initializers.DB.Clauses(clause.OnConflict{
 				Columns:   []clause.Column{{Name: "student_id"}, {Name: "item_name"}, {Name: "subject"}},
-				DoUpdates: clause.AssignmentColumns([]string{"score", "updated_at"}),
+				DoUpdates: clause.AssignmentColumns([]string{"score", "updated_at", "deleted_at"}),
 			}).Create(&models.Grade{
 				StudentID: studentID,
 				ItemName:  colName,
 				Score:     score,
 				Subject:   targetSubject,
 			})
-			successCount++
 		}
 	}
-	log.Printf("匯入完成：寫入 %d 筆，略過 %d 筆。", successCount, skippedCount)
 	redirectBack(c, targetSubject)
 }
 
+// UploadRoster 處理名單 CSV
 func UploadRoster(c *gin.Context) {
 	targetSubject := initializers.CurrentSubject
 	if initializers.IsAdminMode {
@@ -144,28 +141,38 @@ func UploadRoster(c *gin.Context) {
 	reader := csv.NewReader(f)
 	records, _ := reader.ReadAll()
 
-	classIndex, idIndex := 1, 2 // 預設值
+	classIndex, idIndex, nameIndex := -1, -1, -1
 	for i, col := range records[0] {
 		cName := strings.ToLower(utils.CleanHeader(col))
 		if cName == "class" || cName == "班級" { classIndex = i }
 		if cName == "id" || cName == "學號" { idIndex = i }
+		if cName == "name" || cName == "姓名" { nameIndex = i }
 	}
 
 	for i, row := range records {
 		if i == 0 || len(row) <= idIndex { continue }
 		sid := utils.CleanID(row[idIndex])
-		class := strings.TrimSpace(row[classIndex])
 		if sid == "" { continue }
+		
+		class := ""
+		if classIndex != -1 && len(row) > classIndex {
+			class = strings.TrimSpace(row[classIndex])
+		}
+		
+		name := ""
+		if nameIndex != -1 && len(row) > nameIndex {
+			name = strings.TrimSpace(row[nameIndex])
+		}
 
 		initializers.DB.Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "student_id"}, {Name: "subject"}},
-			DoUpdates: clause.AssignmentColumns([]string{"class", "updated_at"}),
-		}).Create(&models.Roster{StudentID: sid, Class: class, Subject: targetSubject})
+			DoUpdates: clause.AssignmentColumns([]string{"class", "name", "updated_at", "deleted_at"}),
+		}).Create(&models.Roster{StudentID: sid, Class: class, Name: name, Subject: targetSubject})
 	}
 	redirectBack(c, targetSubject)
 }
 
-// --- 手動單筆管理功能 (CRUD) ---
+// --- 手動管理與解綁 ---
 
 func PostRoster(c *gin.Context) {
 	targetSubject := getTargetSubject(c)
@@ -175,17 +182,9 @@ func PostRoster(c *gin.Context) {
 	if sid != "" {
 		initializers.DB.Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "student_id"}, {Name: "subject"}},
-			DoUpdates: clause.AssignmentColumns([]string{"class", "updated_at"}),
+			DoUpdates: clause.AssignmentColumns([]string{"class", "updated_at", "deleted_at"}),
 		}).Create(&models.Roster{StudentID: sid, Class: class, Subject: targetSubject})
 	}
-	redirectBack(c, targetSubject)
-}
-
-func DeleteRoster(c *gin.Context) {
-	targetSubject := initializers.CurrentSubject
-	sid := c.Query("student_id")
-	initializers.DB.Where("student_id = ? AND subject = ?", sid, targetSubject).Delete(&models.Roster{})
-	initializers.DB.Where("student_id = ? AND subject = ?", sid, targetSubject).Delete(&models.Grade{})
 	redirectBack(c, targetSubject)
 }
 
@@ -198,7 +197,7 @@ func PostGrade(c *gin.Context) {
 	if sid != "" && itemName != "" {
 		initializers.DB.Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "student_id"}, {Name: "item_name"}, {Name: "subject"}},
-			DoUpdates: clause.AssignmentColumns([]string{"score", "updated_at"}),
+			DoUpdates: clause.AssignmentColumns([]string{"score", "updated_at", "deleted_at"}),
 		}).Create(&models.Grade{StudentID: sid, ItemName: itemName, Score: score, Subject: targetSubject})
 	}
 	redirectBack(c, targetSubject)
@@ -208,22 +207,45 @@ func DeleteGrade(c *gin.Context) {
 	targetSubject := initializers.CurrentSubject
 	sid := c.Query("student_id")
 	item := c.Query("item_name")
+	// 這裡保留普通的 Delete() 讓他變成軟刪除
 	initializers.DB.Where("student_id = ? AND item_name = ? AND subject = ?", sid, item, targetSubject).Delete(&models.Grade{})
 	redirectBack(c, targetSubject)
 }
 
-// --- 批次清空功能 (危險區) ---
-
-// --- 修正：原有的清空功能 (改名以防混淆) ---
-func ClearRoster(c *gin.Context) {
+// 🌟 修正：精準的刪除單一學生名單與成績
+func DeleteSingleRoster(c *gin.Context) {
 	targetSubject := initializers.CurrentSubject
 	if initializers.IsAdminMode {
-		targetSubject = c.PostForm("subject")
+		targetSubject = c.Query("subject")
 	}
-
-	log.Printf("⚠️ 正在 [清空科目] %s 的所有名單...", targetSubject)
-	initializers.DB.Unscoped().Where("subject = ?", targetSubject).Delete(&models.Roster{})
 	
+	sid := c.Query("student_id")
+	if sid != "" {
+		// 使用 Unscoped() 進行硬刪除，避免產生幽靈紀錄
+		initializers.DB.Unscoped().Where("student_id = ? AND subject = ?", sid, targetSubject).Delete(&models.Roster{})
+		initializers.DB.Unscoped().Where("student_id = ? AND subject = ?", sid, targetSubject).Delete(&models.Grade{})
+	}
+	redirectBack(c, targetSubject)
+}
+
+// 解除綁定 Email
+func UnbindStudentEmail(c *gin.Context) {
+	targetSubject := initializers.CurrentSubject
+	if initializers.IsAdminMode {
+		targetSubject = c.Query("subject")
+	}
+	
+	sid := c.Query("student_id")
+	// 硬刪除，讓學生可以重新綁定
+	initializers.DB.Unscoped().Where("student_id = ? AND subject = ?", sid, targetSubject).Delete(&models.Student{})
+	redirectBack(c, targetSubject)
+}
+
+// --- 危險區：全部清空 ---
+
+func ClearRoster(c *gin.Context) {
+	targetSubject := getTargetSubject(c)
+	initializers.DB.Unscoped().Where("subject = ?", targetSubject).Delete(&models.Roster{})
 	redirectBack(c, targetSubject)
 }
 
@@ -248,46 +270,4 @@ func redirectBack(c *gin.Context, subject string) {
 		path += "?subject=" + subject
 	}
 	c.Redirect(http.StatusSeeOther, path)
-}
-
-// UnbindStudentEmail 移除學生的 Email 綁定 (不影響成績與名單)
-func UnbindStudentEmail(c *gin.Context) {
-	targetSubject := initializers.CurrentSubject
-	if initializers.IsAdminMode {
-		targetSubject = c.Query("subject")
-	}
-	
-	sid := c.Query("student_id")
-
-	// 僅從 students 資料表刪除紀錄，這會解除 Email 與學號的連結
-	// 使用 Unscoped() 是因為模型中使用了 gorm.Model，包含 DeletedAt 軟刪除
-	err := initializers.DB.Unscoped().
-		Where("student_id = ? AND subject = ?", sid, targetSubject).
-		Delete(&models.Student{}).Error
-
-	if err != nil {
-		log.Printf("移除綁定失敗: %v", err)
-	}
-
-	redirectBack(c, targetSubject)
-}
-
-// --- 修正：刪除單一學生 (名單與成績連帶刪除) ---
-func DeleteSingleRoster(c *gin.Context) {
-	targetSubject := initializers.CurrentSubject
-	if initializers.IsAdminMode {
-		targetSubject = c.Query("subject")
-	}
-	
-	sid := c.Query("student_id") // 從網址取得學號
-
-	if sid == "" {
-		c.String(400, "無效的學號")
-		return
-	}
-
-	// 🌟 核心修正：必須加上 student_id 條件！
-	initializers.DB.Unscoped().Where("student_id = ? AND subject = ?", sid, targetSubject).Delete(&models.Roster{})
-	initializers.DB.Unscoped().Where("student_id = ? AND subject = ?", sid, targetSubject).Delete(&models.Grade{})
-	redirectBack(c, targetSubject)
 }

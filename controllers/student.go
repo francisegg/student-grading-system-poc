@@ -20,7 +20,7 @@ var IgnoredGradeItems = []string{
 	"No.", "No", "NO",
 	"Class", "class",
 	"ID", "id", "Student ID", "student_id",
-	"Name", "name",
+	"Name", "name", "姓名",
 	"Weight of final exam (%)",
 }
 
@@ -70,9 +70,7 @@ func ShowIndex(c *gin.Context) {
 	}
 
 	var s models.Student
-	result := initializers.DB.Scopes(utils.FilterSubject).First(&s, uid)
-
-	if result.Error != nil {
+	if err := initializers.DB.Scopes(utils.FilterSubject).First(&s, uid).Error; err != nil {
 		c.Redirect(http.StatusSeeOther, "/logout")
 		return
 	}
@@ -102,15 +100,13 @@ func ShowRegister(c *gin.Context) {
 func Register(c *gin.Context) {
 	session := sessions.Default(c)
 	email := session.Get("temp_email")
-	googleName := session.Get("temp_name")
-
 	if email == nil {
 		c.Redirect(302, "/")
 		return
 	}
 	userEmail := email.(string)
 	userName := ""
-	if googleName != nil {
+	if googleName := session.Get("temp_name"); googleName != nil {
 		userName = googleName.(string)
 	}
 
@@ -161,31 +157,17 @@ func ShowMyGrades(c *gin.Context) {
 		return
 	}
 
-	// 1. 取得學生帳號資訊
 	var s models.Student
 	initializers.DB.Scopes(utils.FilterSubject).First(&s, uid)
 
-	// 2. 直接從名單 (Roster) 獲取最新的班級資訊，確保資料正確
-	// var currentRoster models.Roster
-	// targetClass := s.Class
-	// if err := initializers.DB.Where("student_id = ? AND subject = ?", s.StudentID, initializers.CurrentSubject).First(&currentRoster).Error; err == nil {
-	// 	targetClass = currentRoster.Class
-	// }
-
-	// 檢查該科目是否有成績
 	var globalGradeCount int64
 	initializers.DB.Model(&models.Grade{}).Where("subject = ?", initializers.CurrentSubject).Count(&globalGradeCount)
 
 	if globalGradeCount == 0 {
-		c.HTML(http.StatusOK, "no_grades.html", gin.H{
-			"User":    s,
-			"AppName": initializers.AppName,
-			"Subject": initializers.CurrentSubject,
-		})
+		c.HTML(http.StatusOK, "no_grades.html", gin.H{"User": s, "AppName": initializers.AppName, "Subject": initializers.CurrentSubject})
 		return
 	}
 
-// 3. 抓取該學生的成績明細 (用於列表顯示)
 	var displayGrades []models.Grade
 	initializers.DB.Scopes(utils.FilterSubject).
 		Where("student_id = ?", s.StudentID).
@@ -193,11 +175,9 @@ func ShowMyGrades(c *gin.Context) {
 		Order("id asc").
 		Find(&displayGrades)
 
-	// --- 新增：處理學生個人的期末考動態權重 ---
 	preFinalTotal := 0.0
 	finalIdx := -1
 	for i, g := range displayGrades {
-		// ⚠️ 假設您的 CSV 期末考欄位名稱為 "Final" 或 "期末考" (不分大小寫)
 		if strings.EqualFold(g.ItemName, "Final") || strings.EqualFold(g.ItemName, "期末考") {
 			finalIdx = i
 		} else {
@@ -206,32 +186,24 @@ func ShowMyGrades(c *gin.Context) {
 	}
 
 	if finalIdx != -1 {
-		// 期末考佔比 = 100 - 先前總分
 		fWeight := 100.0 - preFinalTotal
-		if fWeight < 0 {
-			fWeight = 0
-		}
+		if fWeight < 0 { fWeight = 0 }
 		rawFinal := displayGrades[finalIdx].Score
 		weightedFinal := rawFinal * (fWeight / 100.0)
 
-		// 覆寫顯示名稱與分數，讓學生能在畫面上看懂計算過程
 		displayGrades[finalIdx].ItemName = fmt.Sprintf("%s (原始:%g, 佔比:%.1f%%)", displayGrades[finalIdx].ItemName, rawFinal, fWeight)
-		// 四捨五入到小數點第二位
 		displayGrades[finalIdx].Score = math.Round(weightedFinal*100) / 100
 	}
 
-	// 4. 計算全班成績分佈 (改在 Go 程式中運算，以支援動態權重)
 	var allClassGrades []models.Grade
 	initializers.DB.Table("grades").
 		Select("grades.*").
-		Joins("JOIN rosters ON rosters.student_id = grades.student_id").
+		Joins("JOIN rosters ON rosters.student_id = grades.student_id AND rosters.subject = grades.subject AND rosters.deleted_at IS NULL").
 		Where("grades.subject = ?", initializers.CurrentSubject).
 		Where("grades.item_name NOT IN ?", IgnoredGradeItems).
-		Where("rosters.subject = ?", initializers.CurrentSubject).
-		// Where("rosters.class = ?", targetClass).
+		Where("grades.deleted_at IS NULL").
 		Find(&allClassGrades)
 
-	// 分類每個學生的平時成績與期末考成績
 	studentPreFinal := make(map[string]float64)
 	studentFinalRaw := make(map[string]float64)
 	studentHasFinal := make(map[string]bool)
@@ -247,62 +219,37 @@ func ShowMyGrades(c *gin.Context) {
 
 	var classTotals []float64
 	myTotal := 0.0
-
-	// 彙整每個人的最終總分
 	studentIDsMap := make(map[string]bool)
-	for _, g := range allClassGrades {
-		studentIDsMap[g.StudentID] = true
-	}
+	for _, g := range allClassGrades { studentIDsMap[g.StudentID] = true }
 
 	for sid := range studentIDsMap {
 		pre := studentPreFinal[sid]
 		total := pre
-		// 如果該學生有考期末考，則加上計算後的期末考分數
 		if studentHasFinal[sid] {
 			weight := 100.0 - pre
-			if weight < 0 {
-				weight = 0
-			}
+			if weight < 0 { weight = 0 }
 			total += studentFinalRaw[sid] * (weight / 100.0)
 		}
-
-		total = math.Round(total*100) / 100 // 四捨五入到小數點第二位
-
+		total = math.Round(total*100) / 100
 		classTotals = append(classTotals, total)
-		if sid == s.StudentID {
-			myTotal = total
-		}
+		if sid == s.StudentID { myTotal = total }
 	}
 
-	// --- 統計計算 ---
-	sum := 0.0
-	minScore, maxScore := 1000.0, -1.0
+	sum, minScore, maxScore := 0.0, 1000.0, -1.0
 	for _, t := range classTotals {
 		sum += t
-		if t < minScore {
-			minScore = t
-		}
-		if t > maxScore {
-			maxScore = t
-		}
+		if t < minScore { minScore = t }
+		if t > maxScore { maxScore = t }
 	}
-	if len(classTotals) == 0 {
-		minScore, maxScore = 0, 0
-	}
+	if len(classTotals) == 0 { minScore, maxScore = 0, 0 }
 
 	mean := 0.0
-	if len(classTotals) > 0 {
-		mean = sum / float64(len(classTotals))
-	}
+	if len(classTotals) > 0 { mean = sum / float64(len(classTotals)) }
 
 	varianceSum := 0.0
-	for _, t := range classTotals {
-		varianceSum += math.Pow(t-mean, 2)
-	}
+	for _, t := range classTotals { varianceSum += math.Pow(t-mean, 2) }
 	stdDev := 0.0
-	if len(classTotals) > 0 {
-		stdDev = math.Sqrt(varianceSum / float64(len(classTotals)))
-	}
+	if len(classTotals) > 0 { stdDev = math.Sqrt(varianceSum / float64(len(classTotals))) }
 
 	sort.Float64s(classTotals)
 	rank := 0
@@ -314,17 +261,13 @@ func ShowMyGrades(c *gin.Context) {
 		rank = i + 1
 	}
 
-	// ★★★ 關鍵修正：PR 值正規化 (0-99) ★★★
 	percentile := 0
 	if len(classTotals) > 1 {
-		// 計算贏過多少人
 		p := math.Floor((float64(rank) / float64(len(classTotals))) * 100)
 		percentile = int(p)
-		if percentile > 99 {
-			percentile = 99 // 封頂 99
-		}
+		if percentile > 99 { percentile = 99 }
 	} else {
-		percentile = 99 // 只有一人時
+		percentile = 99
 	}
 
 	var top3 []float64
@@ -334,9 +277,7 @@ func ShowMyGrades(c *gin.Context) {
 	}
 
 	finalWeight := 100.0 - preFinalTotal
-	if finalWeight < 0 {
-		finalWeight = 0
-	}
+	if finalWeight < 0 { finalWeight = 0 }
 
 	c.HTML(200, "my_grades.html", gin.H{
 		"User":        s,

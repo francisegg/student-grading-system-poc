@@ -23,11 +23,8 @@ func init() {
 func main() {
 	r := gin.Default()
 
-	// ★★★ 新增這行：設定靜態檔案路由 ★★★
-	// 這樣瀏覽器才能讀取到 /static/cover_egg.png
 	r.Static("/static", "./static")
 
-	// 註冊樣板函式
 	r.SetFuncMap(template.FuncMap{
 		"inc": utils.Inc,
 	})
@@ -53,22 +50,22 @@ func main() {
 	teacher := r.Group("/teacher")
 	teacher.Use(middleware.RequireTeacher)
 	{
-teacher.GET("/dashboard", controllers.TeacherDashboard)
+		teacher.GET("/dashboard", controllers.TeacherDashboard)
 		teacher.POST("/upload", controllers.UploadGrades)
 		teacher.POST("/upload-roster", controllers.UploadRoster)
 		
 		// 手動管理路由
 		teacher.POST("/roster/post", controllers.PostRoster)
-		teacher.GET("/roster/delete", controllers.DeleteRoster)
 		teacher.POST("/grade/post", controllers.PostGrade)
 		teacher.GET("/grade/delete", controllers.DeleteGrade)
 
-		// 批次清空路由 (請對應到新的函式名)
-		// 在 teacher 路由組內
-		teacher.GET("/roster/delete-one", controllers.DeleteSingleRoster) // 單筆刪除
-		teacher.POST("/delete-roster", controllers.ClearRoster)           // 批次清空
-
+		// 單筆刪除與解綁
+		teacher.GET("/roster/delete-one", controllers.DeleteSingleRoster)
 		teacher.GET("/student/unbind", controllers.UnbindStudentEmail)
+
+		// 批次清空路由
+		teacher.POST("/delete-roster", controllers.ClearRoster)
+		teacher.POST("/delete-all", controllers.ClearAllGrades)
 	}
 
 	r.Run(":8080")
