@@ -1,11 +1,10 @@
 package initializers
 
 import (
-	"fmt"
 	"log"
 	"os"
 
-	"grade-system/models" // 確保 module 名稱對應 go.mod
+	"grade-system/models"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -15,8 +14,19 @@ var DB *gorm.DB
 
 func ConnectToDB() {
 	var err error
-	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=Asia/Taipei",
-		os.Getenv("DB_HOST"), os.Getenv("DB_USER"), os.Getenv("DB_PASSWORD"), os.Getenv("DB_NAME"), os.Getenv("DB_PORT"))
+	
+	// 優先讀取 Neon (或 Vercel) 提供的完整連線字串
+	dsn := os.Getenv("DATABASE_URL")
+	
+	// 如果沒有 DATABASE_URL，則退回使用原本的拆分環境變數 (供本地開發備用)
+	if dsn == "" {
+		dsn = "host=" + os.Getenv("DB_HOST") + 
+			  " user=" + os.Getenv("DB_USER") + 
+			  " password=" + os.Getenv("DB_PASSWORD") + 
+			  " dbname=" + os.Getenv("DB_NAME") + 
+			  " port=" + os.Getenv("DB_PORT") + 
+			  " sslmode=disable TimeZone=Asia/Taipei"
+	}
 
 	DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
