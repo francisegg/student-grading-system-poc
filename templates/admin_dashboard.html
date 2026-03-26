@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>教師總管理後台</title>
+    <link rel="icon" type="image/png" href="/static/cover_egg.png">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        /* --- 全局日系暖色風格 --- */
+        body { 
+            font-family: "Microsoft JhengHei", "Hiragino Sans GB", sans-serif; 
+            background-color: #f9f7f2; /* 米白背景 */
+            color: #595755; /* 暖深灰文字 */
+            margin: 0; 
+            padding: 0; 
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* --- Loading 過場動畫 --- */
+        #loading-screen {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: #f9f7f2;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 0.6s ease-out, visibility 0.6s ease-out;
+        }
+
+        .loading-egg {
+            width: 50px; height: 60px;
+            background-color: #6a8ecf;
+            border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+            animation: breathe 1.5s infinite ease-in-out;
+            box-shadow: 0 10px 20px rgba(106, 142, 207, 0.3);
+        }
+
+        @keyframes breathe {
+            0%, 100% { transform: scale(0.9); opacity: 0.8; }
+            50% { transform: scale(1.1); opacity: 1; }
+        }
+
+        .loading-text {
+            margin-top: 20px;
+            color: #8e8071;
+            font-size: 0.9em;
+            letter-spacing: 2px;
+            font-weight: bold;
+            animation: fadeIn 1.5s infinite alternate;
+        }
+
+        .hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+
+        /* --- 頂部導覽列 (極簡風) --- */
+        .navbar { 
+            background-color: #ffffff; 
+            padding: 15px 40px; 
+            border-bottom: 1px solid #f0ebe5;
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            box-shadow: 0 2px 10px rgba(163, 148, 133, 0.05);
+        }
+        .brand { 
+            font-size: 1.1rem; 
+            font-weight: bold; 
+            color: #8e8071; 
+            text-decoration: none; 
+            display: flex; 
+            align-items: center; 
+            gap: 10px; 
+        }
+        .user-info { 
+            display: flex; 
+            align-items: center; 
+            gap: 20px; 
+            font-size: 0.9rem; 
+            color: #888; 
+        }
+        .btn-logout { 
+            color: #8e8071; 
+            padding: 6px 12px; 
+            border: 1px solid #e0dcd5;
+            border-radius: 6px; 
+            text-decoration: none; 
+            transition: 0.2s; 
+            font-size: 0.85em;
+        }
+        .btn-logout:hover { 
+            background-color: #fcfbf9; 
+            color: #595755;
+            border-color: #8e8071;
+        }
+
+        /* --- 主要內容區 --- */
+        .container { 
+            max-width: 900px; /* 適中寬度，適合 2x2 */
+            margin: 60px auto; 
+            padding: 0 20px; 
+            text-align: center; 
+            flex: 1;
+        }
+        
+        .hero-text { margin-bottom: 50px; }
+        .hero-text h1 { 
+            font-size: 1.8rem; 
+            color: #4a4a4a; 
+            margin-bottom: 15px; 
+            font-weight: 600;
+        }
+        .hero-text p { color: #999; font-size: 1rem; }
+
+        /* --- 2x2 格狀佈局 --- */
+        .grid { 
+            display: grid; 
+            /* 強制分為 2 欄，每欄平分空間 */
+            grid-template-columns: 1fr 1fr; 
+            gap: 30px; 
+            justify-content: center;
+        }
+        
+        /* 卡片通用樣式 */
+        .card { 
+            background: white; 
+            border-radius: 16px; 
+            padding: 40px 30px; 
+            text-decoration: none; 
+            color: inherit; 
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            border: 1px solid #f0ebe5;
+            box-shadow: 0 4px 15px rgba(163, 148, 133, 0.1); 
+            
+            /* 讓內容置中 */
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center;
+            
+            /* 保持方正比例 */
+            aspect-ratio: 1.2 / 1; 
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* 懸停效果 */
+        .card:hover { 
+            transform: translateY(-5px); 
+            box-shadow: 0 15px 30px rgba(163, 148, 133, 0.2); 
+        }
+
+        /* --- 1. 後台管理卡片 (藍色系) --- */
+        .card-admin {
+            border-top: 5px solid #6a8ecf; /* 頂部藍線 */
+        }
+        .card-admin h2 { 
+            margin: 0 0 8px 0; 
+            font-size: 1.5rem; 
+            color: #4a4a4a; 
+        }
+        .card-admin p { 
+            margin: 0; 
+            color: #6a8ecf; 
+            font-weight: bold; 
+            font-size: 0.9rem;
+            letter-spacing: 1px;
+        }
+        /* 裝飾性背景圓 */
+        .card-admin::before {
+            content: "";
+            position: absolute;
+            top: -20px; right: -20px;
+            width: 80px; height: 80px;
+            background: rgba(106, 142, 207, 0.05);
+            border-radius: 50%;
+            transition: 0.5s;
+        }
+        .card-admin:hover::before { transform: scale(1.5); }
+
+        /* --- 2. 前台預覽卡片 (暖棕/綠色系) --- */
+        .card-view {
+            border-top: 5px solid #8e8071; /* 頂部棕線 */
+            background: #fcfbf9; /* 稍微深一點的背景區分 */
+        }
+        .card-view h2 { 
+            margin: 0 0 8px 0; 
+            font-size: 1.5rem; 
+            color: #595755; 
+        }
+        .card-view p { 
+            margin: 0; 
+            color: #8e8071; 
+            font-size: 0.9rem;
+            letter-spacing: 1px;
+        }
+        .card-view:hover {
+            border-color: #8e8071;
+            background: #fff;
+        }
+
+        /* RWD: 手機版改回單欄 */
+        @media (max-width: 600px) {
+            .grid { grid-template-columns: 1fr; }
+            .navbar { padding: 15px 20px; }
+            .container { margin: 30px auto; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="loading-screen">
+        <div class="loading-egg"></div>
+        <div class="loading-text">LOADING</div>
+    </div>
+
+    <div class="navbar">
+        <a href="/" class="brand">
+            教師管理總覽
+        </a>
+        <div class="user-info">
+            <span>{{ .UserEmail }}</span>
+            <a href="/logout" class="btn-logout">登出</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="hero-text">
+            <h1>歡迎回來，老師</h1>
+            <p>請選擇您要管理的科目，或查看學生端頁面</p>
+        </div>
+
+        <div class="grid">
+            {{ range .Subjects }}
+            <a href="/teacher/dashboard?subject={{ . }}" class="card card-admin">
+                <h2>{{ . }}</h2>
+                <p>進入成績管理</p>
+            </a>
+            {{ end }}
+
+            <a href="https://circuit.teaegg.space" target="_blank" class="card card-view">
+                <h2>電路學</h2>
+                <p>查看前台頁面 ➜</p>
+            </a>
+            
+             <a href="https://antenna.teaegg.space" target="_blank" class="card card-view">
+                <h2>天線工程</h2>
+                <p>查看前台頁面 ➜</p>
+            </a>
+        </div>
+    </div>
+
+    <script>
+        // 過場動畫邏輯
+        window.addEventListener('load', function() {
+            const loader = document.getElementById('loading-screen');
+            setTimeout(() => {
+                loader.classList.add('hidden');
+            }, 500);
+        });
+    </script>
+
+</body>
+</html>

@@ -1,34 +1,230 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>學生分數平台</title>
+    <title>{{ .AppName }}</title>
     <link rel="icon" type="image/png" href="/static/cover_egg.png">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { font-family: sans-serif; max-width: 800px; margin: 40px auto; text-align: center; }
-        .btn { padding: 10px 20px; background: #4285F4; color: white; text-decoration: none; border-radius: 5px; }
-        .teacher-btn { background: #ea4335; }
+        /* --- 全局日系暖色風格 --- */
+        body { 
+            font-family: "Microsoft JhengHei", "Hiragino Sans GB", sans-serif; 
+            background-color: #f9f7f2; /* 米白背景 */
+            color: #595755; /* 暖深灰文字 */
+            margin: 0; 
+            padding: 0; 
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center; /* 垂直水平置中 */
+        }
+
+        /* --- Loading 過場動畫 (與成績頁一致) --- */
+        #loading-screen {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: #f9f7f2;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 0.6s ease-out, visibility 0.6s ease-out;
+        }
+
+        .loading-egg {
+            width: 50px; height: 60px;
+            background-color: #6a8ecf; /* 柔和藍 */
+            border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+            animation: breathe 1.5s infinite ease-in-out;
+            box-shadow: 0 10px 20px rgba(106, 142, 207, 0.3);
+        }
+
+        @keyframes breathe {
+            0%, 100% { transform: scale(0.9); opacity: 0.8; }
+            50% { transform: scale(1.1); opacity: 1; }
+        }
+
+        .loading-text {
+            margin-top: 20px;
+            color: #8e8071;
+            font-size: 0.9em;
+            letter-spacing: 2px;
+            font-weight: bold;
+            animation: fadeIn 1.5s infinite alternate;
+        }
+
+        .hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+
+        /* --- 主內容卡片 --- */
+        .login-card {
+            background: #ffffff;
+            width: 100%;
+            max-width: 420px; /* 限制寬度，更精緻 */
+            padding: 50px 40px;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(163, 148, 133, 0.15); /* 暖色柔和陰影 */
+            text-align: center;
+            border: 1px solid #f0ebe5;
+            transform: translateY(20px);
+            opacity: 0;
+            animation: slideUpFade 0.8s ease-out forwards 0.5s; /* Loading 後浮現 */
+        }
+
+        @keyframes slideUpFade {
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .logo-img {
+            width: 100px;
+            height: auto;
+            margin-bottom: 25px;
+            /* 讓 Logo 也有點溫潤的質感 */
+            filter: drop-shadow(0 4px 6px rgba(163, 148, 133, 0.2));
+        }
+
+        h1 {
+            font-size: 1.6em;
+            color: #4a4a4a;
+            margin: 0 0 10px 0;
+            font-weight: 600;
+        }
+
+        p {
+            color: #888;
+            line-height: 1.6;
+            margin-bottom: 35px;
+            font-size: 0.95em;
+        }
+
+        /* --- 按鈕樣式 --- */
+        .btn-group {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 12px 0;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 1em;
+            transition: all 0.2s ease;
+            box-sizing: border-box;
+            cursor: pointer;
+        }
+
+        /* 主要按鈕 (柔和藍) */
+        .btn-primary {
+            background-color: #6a8ecf;
+            color: white;
+            box-shadow: 0 4px 10px rgba(106, 142, 207, 0.3);
+            border: none;
+        }
+        .btn-primary:hover {
+            background-color: #5a7ebf;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(106, 142, 207, 0.4);
+        }
+
+        /* 次要按鈕 (暖棕灰) */
+        .btn-secondary {
+            background-color: #8e8071;
+            color: white;
+            box-shadow: 0 4px 10px rgba(142, 128, 113, 0.3);
+        }
+        .btn-secondary:hover {
+            background-color: #756a5d;
+            transform: translateY(-2px);
+        }
+
+        /* 幽靈按鈕 (外框) */
+        .btn-outline {
+            background-color: transparent;
+            border: 2px solid #e0dcd5;
+            color: #8e8071;
+        }
+        .btn-outline:hover {
+            border-color: #8e8071;
+            background-color: #fcfbf9;
+        }
+
+        /* 使用者資訊區塊 */
+        .user-info {
+            background-color: #f9f7f2;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 25px;
+            text-align: left;
+            border: 1px solid #efebe5;
+        }
+        .user-info div {
+            margin: 5px 0;
+            font-size: 0.9em;
+            color: #666;
+        }
+        .user-info b {
+            color: #4a4a4a;
+        }
+        .user-welcome {
+            font-size: 1.1em;
+            color: #8e8071;
+            font-weight: bold;
+            margin-bottom: 10px !important;
+        }
+
     </style>
 </head>
 <body>
-    <h1>🎓 學生分數平台</h1>
-    <hr>
-    
-    {{ if .Logged }}
-        <h2>你好，{{ .User.Name }}</h2>
-        <p>Email: {{ .User.Email }}</p>
+
+    <div id="loading-screen">
+        <div class="loading-egg"></div>
+        <div class="loading-text">LOADING</div>
+    </div>
+
+    <div class="login-card">
+        <!-- <img src="/static/cover_egg.png" alt="Logo" class="logo-img"> -->
         
-        <p><a href="/my-grades" class="btn">📄 查看我的成績單</a></p>
+        <h1>{{ .AppName }}</h1>
+        
+        {{ if .Logged }}
+            <div class="user-info">
+                <div class="user-welcome">歡迎回來，{{ .User.Name }}</div>
+                <div>學號：<b>{{ .User.StudentID }}</b></div>
+                <!-- <div>班級：<b>{{ .User.Class }}</b></div> -->
+                <div style="font-size: 0.85em; color: #999; margin-top: 8px;">Email: <b>{{ .User.Email }}</b></div>
+            </div>
 
-        {{ if .IsTeacher }}
-            <br>
-            <p><a href="/teacher/dashboard" class="btn teacher-btn">👨‍🏫 老師管理後台</a></p>
+            <div class="btn-group">
+                {{ if .IsTeacher }}
+                    <a href="/teacher/dashboard" class="btn btn-secondary">進入教師管理後台</a>
+                {{ end }}
+                
+                <a href="/my-grades" class="btn btn-primary">查看我的成績</a>
+                <a href="/logout" class="btn btn-outline">登出</a>
+            </div>
+
+        {{ else }}
+            <p>歡迎使用成績查詢系統<br>請使用 Google 帳號進行登入以查看您的學習紀錄</p>
+            
+            <div class="btn-group">
+                <a href="/login" class="btn btn-primary">Google 帳號登入</a>
+            </div>
         {{ end }}
+    </div>
 
-        <br><br>
-        <a href="/logout">登出</a>
-    {{ else }}
-        <p>請登入以查看成績</p>
-        <a href="/login" class="btn">Google 登入</a>
-    {{ end }}
+    <script>
+        // 過場動畫邏輯
+        window.addEventListener('load', function() {
+            const loader = document.getElementById('loading-screen');
+            setTimeout(() => {
+                loader.classList.add('hidden');
+            }, 500);
+        });
+    </script>
+
 </body>
 </html>

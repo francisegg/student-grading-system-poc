@@ -6,40 +6,254 @@
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { font-family: "Microsoft JhengHei", sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; }
-        .container { max-width: 900px; margin: 0 auto; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .btn { text-decoration: none; background: #6c757d; color: white; padding: 8px 15px; border-radius: 5px; font-size: 0.9em; }
+        /* --- 全局日系暖色風格設定 --- */
+        body { 
+            font-family: "Microsoft JhengHei", "Hiragino Sans GB", sans-serif; 
+            background-color: #f9f7f2; /* 日系米白背景 */
+            color: #595755; /* 柔和深褐灰文字 */
+            margin: 0; 
+            padding: 20px; 
+            min-height: 100vh;
+        }
+
+        /* --- Loading 過場動畫樣式 --- */
+        #loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #f9f7f2; /* 與背景同色，無縫銜接 */
+            z-index: 9999; /* 確保在最上層 */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 0.6s ease-out, visibility 0.6s ease-out;
+        }
+
+        /* 呼吸的蛋形/圓形 */
+        .loading-egg {
+            width: 50px;
+            height: 60px; /* 稍微橢圓，像蛋 */
+            background-color: #6a8ecf; /* 柔和藍 */
+            border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%; /* 蛋形圓角 */
+            animation: breathe 1.5s infinite ease-in-out;
+            box-shadow: 0 10px 20px rgba(106, 142, 207, 0.3);
+        }
+
+        @keyframes breathe {
+            0%, 100% { transform: scale(0.9); opacity: 0.8; }
+            50% { transform: scale(1.1); opacity: 1; }
+        }
+
+        .loading-text {
+            margin-top: 20px;
+            color: #8e8071;
+            font-size: 0.9em;
+            letter-spacing: 2px;
+            font-weight: bold;
+            animation: fadeIn 1.5s infinite alternate;
+        }
+
+        /* 隱藏狀態 */
+        .hidden {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
         
-        .card { background: white; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); padding: 25px; margin-bottom: 25px; }
-        .card h3 { margin-top: 0; color: #333; border-bottom: 2px solid #f0f0f0; padding-bottom: 10px; }
+        /* --- 原有樣式 --- */
+        .container { max-width: 900px; margin: 0 auto; }
+        
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        
+        .btn { 
+            text-decoration: none; 
+            background: #8e8071; 
+            color: white; 
+            padding: 8px 15px; 
+            border-radius: 6px; 
+            font-size: 0.9em; 
+            transition: background 0.2s;
+            box-shadow: 0 2px 5px rgba(142, 128, 113, 0.3);
+        }
+        .btn:hover { background: #756a5d; }
+        
+        .card { 
+            background: #ffffff; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 12px rgba(163, 148, 133, 0.15); 
+            padding: 25px; 
+            margin-bottom: 25px; 
+            border: 1px solid #f0ebe5;
+        }
+        
+        .card h3 { 
+            margin-top: 0; 
+            color: #4a4a4a; 
+            border-bottom: 2px solid #f2efea; 
+            padding-bottom: 10px; 
+            font-weight: 600;
+        }
 
         .charts-row { display: flex; gap: 20px; }
         .chart-box { flex: 1; min-width: 300px; }
 
         table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
-        th { color: #666; }
-        .score-val { font-weight: bold; color: #4285F4; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #f2efea; }
+        th { color: #888; font-weight: normal; }
+        .score-val { font-weight: bold; color: #6a8ecf; }
 
-        .pr-badge {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white; padding: 5px 15px; border-radius: 20px; font-size: 0.9em; float: right;
-        }
-
-        /* --- 新增重點數據區樣式 --- */
         .metrics-row { display: flex; gap: 20px; margin-bottom: 25px; }
-        .metric-card {
-            flex: 1; background: white; padding: 20px; border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center; border-left: 5px solid #ddd;
-        }
-        .metric-title { font-size: 0.9em; color: #666; margin-bottom: 5px; }
-        .metric-value { font-size: 2em; font-weight: bold; color: #333; }
-        .metric-sub { font-size: 0.8em; color: #999; margin-top: 5px; }
-        .card-blue { border-left-color: #4285F4; }
-        .card-green { border-left-color: #34A853; }
-        .card-orange { border-left-color: #FBBC05; }
         
+        .metric-card {
+            flex: 1; 
+            background: white; 
+            padding: 20px; 
+            border-radius: 12px;
+            box-shadow: 0 4px 10px rgba(163, 148, 133, 0.12); 
+            text-align: center; 
+            border-left: none;
+            border-top: 4px solid #dcd6cc;
+            position: relative;
+            transition: transform 0.2s ease;
+        }
+        
+        .metric-card:hover {
+            transform: translateY(-2px);
+            border-top-color: #8e8071;
+        }
+
+        .metric-title { 
+            font-size: 0.9em; 
+            color: #8e8071; 
+            margin-bottom: 8px; 
+            font-weight: bold;
+            letter-spacing: 0.5px;
+        }
+        
+        .metric-value { 
+            font-size: 2.2em; 
+            font-weight: bold; 
+            color: #6a8ecf; 
+            line-height: 1.2;
+        }
+        
+        .metric-sub { font-size: 0.8em; color: #aaa; margin-top: 5px; }
+
+        .top3-list {
+            text-align: center; 
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            padding-top: 5px;
+        }
+        .top3-item {
+            font-size: 0.95em; 
+            color: #555; 
+            margin: 3px 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 80%;
+            max-width: 200px;
+            border-bottom: 1px dashed #eee;
+            padding-bottom: 2px;
+        }
+        .top3-item:last-child { border-bottom: none; }
+        
+        .rank-label {
+            font-size: 0.85em;
+            color: #888;
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+        
+        .top3-score {
+            color: #6a8ecf;
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+
+        .pr-wrapper {
+            position: relative;
+            margin: 45px 10px 50px 10px;
+        }
+
+        .pr-bar-container {
+            position: relative;
+            height: 28px; 
+            background: #ebe8e3;
+            border-radius: 14px;
+            box-shadow: inset 0 2px 4px rgba(163, 148, 133, 0.1);
+        }
+        
+        .pr-bar-inner {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            border-radius: 14px;
+            overflow: hidden;
+        }
+
+        .pr-fill-bar {
+            position: absolute;
+            left: 0; top: 0; bottom: 0;
+            width: 0%; 
+            background: linear-gradient(90deg, #a3bded 0%, #6a8ecf 100%);
+            transition: width 1.2s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+        
+        .pr-scale {
+            display: flex; 
+            justify-content: space-between; 
+            color: #999; 
+            font-size: 0.85em; 
+            margin-top: 10px;
+            position: relative;
+            left: -5px;
+            width: calc(100% + 10px);
+        }
+        .pr-scale span { width: 20px; text-align: center; }
+
+        .pr-marker {
+            position: absolute;
+            top: -12px;
+            transform: translateX(-50%);
+            text-align: center;
+            transition: left 1.2s cubic-bezier(0.22, 1, 0.36, 1);
+            left: 0%;
+            z-index: 20;
+            width: 90px;
+            pointer-events: none;
+        }
+
+        .pr-tag {
+            background: #6a8ecf;
+            color: white; 
+            padding: 6px 14px; 
+            border-radius: 6px; 
+            font-weight: bold; 
+            font-size: 1.1em;
+            box-shadow: 0 3px 8px rgba(106, 142, 207, 0.3);
+            display: inline-block;
+            border: 2px solid white;
+        }
+        
+        .pr-arrow {
+            width: 0; 
+            height: 0; 
+            border-left: 7px solid transparent; 
+            border-right: 7px solid transparent; 
+            border-top: 9px solid #6a8ecf; 
+            margin: -1px auto 0 auto;
+            position: relative;
+            z-index: 21;
+        }
+
         @media (max-width: 768px) { 
             .charts-row { flex-direction: column; } 
             .metrics-row { flex-direction: column; }
@@ -48,32 +262,41 @@
 </head>
 <body>
 
+<div id="loading-screen">
+    <div class="loading-egg"></div>
+    <div class="loading-text">LOADING</div>
+</div>
+
 <div class="container">
     <div class="header">
-        <h1>🎓 {{ .User.Name }} 的學習歷程</h1>
-        <a href="/" class="btn">⬅ 回首頁</a>
+        <div>
+            <h1 style="color: #4a4a4a; margin-bottom: 5px;">{{ .User.StudentID }} ({{ .User.Name }}) 的分數記錄</h1>
+            <p style="color: #888; margin: 0; font-size: 0.95em;">班級：{{ .User.Class }}</p>
+        </div>
+        <a href="/" class="btn">回首頁</a>
     </div>
 
     <div class="metrics-row">
-        <div class="metric-card card-blue">
+        <div class="metric-card">
             <div class="metric-title">目前累積總分</div>
             <div class="metric-value">{{ printf "%.1f" .MyTotal }}</div>
             <div class="metric-sub">分</div>
         </div>
 
-        <div class="metric-card card-orange">
+        <div class="metric-card">
             <div class="metric-title">期末佔比 (剩餘權重)</div>
             <div class="metric-value">{{ printf "%.1f" .FinalWeight }}%</div>
-            <div class="metric-sub">距離滿分還差</div>
         </div>
 
-        <div class="metric-card card-green">
-            <div class="metric-title">🏆 全班前三高分</div>
-            <div style="text-align: left; display: inline-block; margin-top: 5px;">
+        <div class="metric-card">
+            <div class="metric-title">全班前三高分</div>
+            <div class="top3-list">
                 {{ range $i, $score := .Top3 }}
-                    <div style="font-size: 1.1em; color: #444; margin: 4px 0;">
-                        <span style="margin-right:8px;">{{ if eq $i 0 }}🥇{{ else if eq $i 1 }}🥈{{ else }}🥉{{ end }}</span> 
-                        <b>{{ $score }}</b> 分
+                    <div class="top3-item">
+                        <span class="rank-label">
+                            {{ if eq $i 0 }}第一名{{ else if eq $i 1 }}第二名{{ else }}第三名{{ end }}
+                        </span> 
+                        <span class="top3-score">{{ $score }}</span>
                     </div>
                 {{ end }}
             </div>
@@ -82,28 +305,46 @@
 
     <div class="charts-row">
         <div class="card chart-box">
-            <h3>📈 積分累積趨勢</h3>
+            <h3>積分累積趨勢</h3>
             <canvas id="trendChart" height="200"></canvas>
         </div>
-        <div class="card chart-box">
-            <div>
-                <h3>
-                    📊 全班落點分析
-                    <span class="pr-badge">贏過 {{ .Percentile }}% 的同學</span>
-                </h3>
+
+        <div class="card chart-box" style="display: flex; flex-direction: column; justify-content: center;">
+            <div style="text-align: center; margin-bottom: 0px;">
+                <h3 style="border: none; padding: 0;">全班排名落點 (PR)</h3>
+                <p style="color: #888; margin: 0; font-size: 0.9em;">(贏過 {{ .Percentile }}% 的同學)</p>
             </div>
-            <p style="font-size: 0.85em; color: #666; margin-bottom: 5px;">
-                目前總分：<b>{{ .MyTotal }}</b> / 全班平均：<b>{{ printf "%.1f" .ClassMean }}</b>
-            </p>
-            <p style="font-size: 0.8em; color: #999; margin: 0;">
-                (全班範圍：{{ .ClassMin }} ~ {{ .ClassMax }} 分)
-            </p>
-            <canvas id="distributionChart" height="200"></canvas>
+            
+            <div style="padding: 10px 20px;">
+                <div class="pr-wrapper">
+                    <div id="pr-marker" class="pr-marker">
+                        <div class="pr-tag">PR {{ .Percentile }}</div>
+                        <div class="pr-arrow"></div>
+                    </div>
+
+                    <div class="pr-bar-container">
+                        <div class="pr-bar-inner">
+                            <div id="pr-fill" class="pr-fill-bar"></div>
+                            <div style="position: absolute; left: 25%; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,0.6);"></div>
+                            <div style="position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,0.6);"></div>
+                            <div style="position: absolute; left: 75%; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,0.6);"></div>
+                        </div>
+                    </div>
+
+                    <div class="pr-scale">
+                        <span>0</span>
+                        <span>25</span>
+                        <span>50</span>
+                        <span>75</span>
+                        <span>99</span>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
     <div class="card">
-        <h3>📄 詳細成績數據</h3>
+        <h3>詳細成績數據</h3>
         <table>
             <thead>
                 <tr>
@@ -118,21 +359,51 @@
 </div>
 
 <script>
-    // --- JavaScript 邏輯保持不變 ---
+    // --- 過場動畫邏輯 ---
+    window.addEventListener('load', function() {
+        const loader = document.getElementById('loading-screen');
+        // 延遲一點點讓使用者看到動畫 (可選，這裡設 500ms)
+        setTimeout(() => {
+            loader.classList.add('hidden'); // 觸發 CSS fade out
+            
+            // 啟動內部的圖表動畫
+            initCharts();
+        }, 500);
+    });
+
+    // 將圖表初始化包成函式，等 Loading 結束再執行，效果更好
+    function initCharts() {
+        // --- 設定 PR 指標與填色 ---
+        const pos = Math.min(100, Math.max(0, myPR));
+        const marker = document.getElementById('pr-marker');
+        const fill = document.getElementById('pr-fill');
+
+        marker.style.left = pos + '%';
+        fill.style.width = pos + '%';
+        
+        // 邊界修正
+        if (pos < 10) {
+            marker.style.transform = 'translateX(-15%)'; 
+        } else if (pos > 90) {
+            marker.style.transform = 'translateX(-85%)'; 
+        } else {
+            marker.style.transform = 'translateX(-50%)'; 
+        }
+    }
+
+    // --- 取得後端資料 ---
     const rawLabels = [{{ range .Grades }}"{{ .ItemName }}",{{ end }}];
     const rawScores = [{{ range .Grades }}{{ .Score }},{{ end }}];
-    const myTotalScore = {{ .MyTotal }};
-    const classMean = {{ .ClassMean }};
-    const classStdDev = {{ .ClassStdDev }};
-    const classMin = {{ .ClassMin }};
-    const classMax = {{ .ClassMax }};
+    const myPR = {{ .Percentile }};
 
+    // --- 2. 累積成績 ---
     let runningTotal = 0;
     const cumulativeScores = rawScores.map(score => {
         runningTotal += score;
         return parseFloat(runningTotal.toFixed(2));
     });
 
+    // --- 3. 繪製趨勢圖 ---
     const ctxTrend = document.getElementById('trendChart').getContext('2d');
     new Chart(ctxTrend, {
         type: 'line',
@@ -141,11 +412,11 @@
             datasets: [{
                 label: '累計總分',
                 data: cumulativeScores,
-                borderColor: '#4285F4',
-                backgroundColor: 'rgba(66, 133, 244, 0.1)',
+                borderColor: '#6a8ecf', 
+                backgroundColor: 'rgba(106, 142, 207, 0.1)',
                 borderWidth: 2,
                 pointBackgroundColor: '#fff',
-                pointBorderColor: '#ea4335',
+                pointBorderColor: '#eec06b',
                 fill: true,
                 tension: 0.3
             }]
@@ -153,76 +424,23 @@
         options: {
             responsive: true,
             plugins: { legend: { display: false } },
-            scales: { y: { beginAtZero: true } }
-        }
-    });
-
-    const startX = Math.floor(classMin);
-    const endX = Math.ceil(classMax);
-    const step = (endX - startX) / 60;
-
-    const distData = [];
-    const distLabels = [];
-    for (let x = startX; x <= endX; x += step) {
-        let y = 0;
-        if (classStdDev > 0) {
-            y = (1 / (classStdDev * Math.sqrt(2 * Math.PI))) * Math.exp(-0.5 * Math.pow((x - classMean) / classStdDev, 2));
-        } else {
-            y = (Math.abs(x - classMean) < 1) ? 1 : 0;
-        }
-        distLabels.push(x.toFixed(0));
-        distData.push({ x: x, y: y });
-    }
-
-    const myRangeData = distData.map(p => {
-        return p.x <= myTotalScore ? p.y : null;
-    });
-
-    const ctxDist = document.getElementById('distributionChart').getContext('2d');
-    new Chart(ctxDist, {
-        type: 'line',
-        data: {
-            labels: distLabels,
-            datasets: [
-                {
-                    label: '全班分佈',
-                    data: distData.map(p => p.y),
-                    borderColor: '#ddd',
-                    borderWidth: 1,
-                    pointRadius: 0,
-                    fill: false,
-                    tension: 0.4
-                },
-                {
-                    label: '我的位置',
-                    data: myRangeData,
-                    borderColor: 'rgba(118, 75, 162, 1)',
-                    backgroundColor: 'rgba(118, 75, 162, 0.5)',
-                    borderWidth: 2,
-                    pointRadius: 0,
-                    fill: true,
-                    tension: 0.4
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            plugins: { legend: { display: false }, tooltip: { enabled: false } },
-            scales: {
-                x: { title: { display: true, text: '總分區間 (Min ~ Max)' }, ticks: { maxTicksLimit: 6 } },
-                y: { display: false }
+            scales: { 
+                y: { beginAtZero: true },
+                x: { grid: { display: false } }, 
+                y: { grid: { color: '#f0f0f0' } } 
             }
         }
     });
 
+    // --- 4. 表格 ---
     const tableBody = document.getElementById('scoreTableBody');
     let tableHTML = '';
     for (let i = rawLabels.length - 1; i >= 0; i--) {
         tableHTML += `
             <tr>
                 <td>${rawLabels[i]}</td>
-                <td style="color: #666;">+${rawScores[i]}</td>
-                <td class="score-val">${cumulativeScores[i]}</td>
+                <td style="color: #888;">+${rawScores[i]}</td>
+                <td class="score-val" style="color: #6a8ecf;">${cumulativeScores[i]}</td>
             </tr>
         `;
     }

@@ -1,98 +1,192 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>老師管理後台</title>
+    <title>課程管理 - {{ .Subject }}</title>
     <link rel="icon" type="image/png" href="/static/cover_egg.png">
-
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { font-family: "Microsoft JhengHei", sans-serif; max-width: 1000px; margin: 30px auto; padding: 20px; }
-        .container { display: flex; gap: 30px; }
-        .upload-box { flex: 1; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background: #f9f9f9; height: fit-content; }
-        .data-box { flex: 2; }
-        
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        th { background-color: #4285F4; color: white; }
-        tr:nth-child(even) { background-color: #f2f2f2; }
-
-        .btn { padding: 10px 15px; background: #4285F4; color: white; border: none; cursor: pointer; border-radius: 4px; }
-        .btn:hover { background: #3367D6; }
-        .home-link { text-decoration: none; color: #666; font-size: 0.9em; }
+        body { font-family: "Microsoft JhengHei", sans-serif; background-color: #f9f7f2; color: #595755; margin: 0; padding: 0; min-height: 100vh;}
+        #loading-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: #f9f7f2; z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; transition: opacity 0.6s ease-out, visibility 0.6s ease-out; }
+        .loading-egg { width: 50px; height: 60px; background-color: #6a8ecf; border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%; animation: breathe 1.5s infinite ease-in-out; }
+        @keyframes breathe { 0%, 100% { transform: scale(0.9); opacity: 0.8; } 50% { transform: scale(1.1); opacity: 1; } }
+        .loading-text { margin-top: 20px; color: #8e8071; font-size: 0.9em; letter-spacing: 2px; font-weight: bold; }
+        .hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+        .top-bar { background: #ffffff; padding: 15px 40px; border-bottom: 1px solid #f0ebe5; display: flex; justify-content: space-between; }
+        .breadcrumb a { text-decoration: none; color: #8e8071; font-weight: bold; }
+        .current-subject { background: #eef3fc; color: #6a8ecf; padding: 4px 12px; border-radius: 15px; font-weight: bold; }
+        .container { max-width: 1300px; margin: 30px auto; padding: 0 20px; display: grid; grid-template-columns: 380px 1fr; gap: 30px; }
+        .card { background: #ffffff; padding: 30px; border-radius: 12px; border: 1px solid #f0ebe5; height: fit-content; }
+        h3 { margin-top: 0; border-bottom: 2px solid #f2efea; padding-bottom: 15px; font-weight: 600; }
+        .upload-section { margin-bottom: 30px; }
+        .section-title { font-weight: bold; color: #6a8ecf; margin-bottom: 8px; display: block; }
+        .manual-box { background: #fcfbf9; padding: 12px; border-radius: 8px; border: 1px solid #eee; margin-top: 10px; }
+        .manual-form { display: flex; flex-direction: column; gap: 8px; }
+        .manual-form input { padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+        .upload-area { border: 2px dashed #e0dcd5; border-radius: 8px; padding: 15px; text-align: center; margin-bottom: 10px; background: #faf9f7; }
+        button { border: none; padding: 10px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: bold; transition: all 0.2s; }
+        .btn-primary { background: #6a8ecf; color: white; }
+        .btn-secondary { background: #8e8071; color: white; }
+        .btn-success { background: #67b06a; color: white; }
+        .btn-danger { background: white; color: #d9534f; border: 1px solid #d9534f; margin-bottom: 10px; }
+        .btn-danger:hover { background: #d9534f; color: white; }
+        .table-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; margin-bottom: 30px; overflow: hidden; }
+        th { background-color: #faf9f7; color: #888; padding: 12px 15px; text-align: left; }
+        td { padding: 12px 15px; border-bottom: 1px solid #f9f7f2; }
+        .status-badge { padding: 3px 8px; border-radius: 4px; font-size: 0.8em; font-weight: bold; }
+        .status-ok { background: #ebfbee; color: #4caf50; }
+        .status-missing { background: #fff0f0; color: #e57373; }
+        .delete-link { color: #d9534f; text-decoration: none; padding: 5px; }
     </style>
 </head>
 <body>
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-        <h1>👨‍🏫 老師成績管理系統</h1>
-        <a href="/" class="home-link">⬅ 回首頁</a>
+
+    <div id="loading-screen">
+        <div class="loading-egg"></div>
+        <div class="loading-text">LOADING</div>
     </div>
-    <hr>
+
+    <div class="top-bar">
+        <div class="breadcrumb">
+            <a href="/">課程大廳</a> / <span class="current-subject">{{ .Subject }}</span>
+        </div>
+        <div style="font-size: 0.85em; color: #aaa;">{{ if .IsAdmin }}管理員權限已開啟{{ else }}教師模式{{ end }}</div>
+    </div>
 
     <div class="container">
-        <div class="upload-box">
-            <h3>📂 批次匯入成績</h3>
-            <p>請上傳 CSV 檔案，格式如下：</p>
-            <pre style="background:#eee; padding:10px; border-radius:4px;">學號,分數,項目
-110001,85,期中考
-110002,90,期中考</pre>
+        <div class="card">
+            <h3>課程管理工具</h3>
             
-            <form action="/teacher/upload" method="POST" enctype="multipart/form-data">
-                <input type="file" name="csv_file" accept=".csv" required style="margin: 10px 0;">
-                <br>
-                <button type="submit" class="btn">🚀 上傳並匯入</button>
-            </form>
-            
-            </form>
-            
-            <hr style="margin: 25px 0; border: 0; border-top: 1px dashed #ccc;">
-            
-            <div style="background-color: #fff5f5; border: 1px solid #fc8181; padding: 15px; border-radius: 6px;">
-                <h4 style="margin-top: 0; color: #c53030;">⚠️ 開發測試區</h4>
-                <p style="font-size: 0.9em; color: #742a2a; margin-bottom: 10px;">
-                    此按鈕將<b>永久刪除</b>所有學生成績資料，用於 Demo 重置環境。
-                </p>
-                <form action="/teacher/delete-all" method="POST" onsubmit="return confirm('🧨 嚴重警告：\n\n確定要「清空所有資料庫」嗎？\n\n此動作無法復原！所有學生的成績都會消失！');">
-                    <button type="submit" class="btn" style="background-color: #c53030; width: 100%;">
-                        💣 一鍵清空所有資料
-                    </button>
+            <div class="upload-section">
+                <span class="section-title">1. 名單管理</span>
+                <form action="/teacher/upload-roster" method="POST" enctype="multipart/form-data">
+                    {{ if .IsAdmin }}<input type="hidden" name="subject" value="{{ .Subject }}">{{ end }}
+                    <div class="upload-area"><input type="file" name="roster_file" accept=".csv" required></div>
+                    <button type="submit" class="btn-secondary" style="margin-bottom: 8px;">批次匯入名單</button>
+                </form>
+
+                <details class="manual-box">
+                    <summary style="cursor: pointer; font-size: 0.85em; color: #8e8071;">手動新增/修改單一學生</summary>
+                    <form action="/teacher/roster/post" method="POST" class="manual-form" style="margin-top:10px;">
+                        {{ if .IsAdmin }}<input type="hidden" name="subject" value="{{ .Subject }}">{{ end }}
+                        <input type="text" name="student_id" placeholder="學號 (ID)" required>
+                        <input type="text" name="class" placeholder="班級 (例如: 電子一)">
+                        <button type="submit" class="btn-success">儲存學生</button>
+                    </form>
+                </details>
+            </div>
+
+            <div class="upload-section">
+                <span class="section-title">2. 成績管理</span>
+                <form action="/teacher/upload" method="POST" enctype="multipart/form-data">
+                    {{ if .IsAdmin }}<input type="hidden" name="subject" value="{{ .Subject }}">{{ end }}
+                    <div class="upload-area"><input type="file" name="csv_file" accept=".csv" required></div>
+                    <button type="submit" class="btn-primary" style="margin-bottom: 8px;">批次匯入成績</button>
+                </form>
+
+                <details class="manual-box">
+                    <summary style="cursor: pointer; font-size: 0.85em; color: #6a8ecf;">手動新增/修改單一成績</summary>
+                    <form action="/teacher/grade/post" method="POST" class="manual-form" style="margin-top:10px;">
+                        {{ if .IsAdmin }}<input type="hidden" name="subject" value="{{ .Subject }}">{{ end }}
+                        <input type="text" name="student_id" placeholder="學號 (ID)" required>
+                        <input type="text" name="item_name" placeholder="評量項目 (如: Final)" required>
+                        <input type="number" step="0.01" name="score" placeholder="分數" required>
+                        <button type="submit" class="btn-success">儲存成績</button>
+                    </form>
+                </details>
+            </div>
+
+            <div style="border-top: 1px dashed #e0dcd5; padding-top: 20px; margin-top: 20px;">
+                <span style="color: #d9534f; font-weight: bold; font-size: 0.9em;">危險操作</span>
+                <form action="/teacher/delete-roster" method="POST" onsubmit="return confirm('確定要清空此科目所有名單嗎？');" style="margin-top:10px;">
+                    {{ if .IsAdmin }}<input type="hidden" name="subject" value="{{ .Subject }}">{{ end }}
+                    <button type="submit" class="btn-danger" style="margin-bottom: 5px;">清空修課名單</button>
+                </form>
+                <form action="/teacher/delete-all" method="POST" onsubmit="return confirm('確定要清空此科目所有成績嗎？此動作無法復原！');">
+                    {{ if .IsAdmin }}<input type="hidden" name="subject" value="{{ .Subject }}">{{ end }}
+                    <button type="submit" class="btn-danger">清空所有成績</button>
                 </form>
             </div>
         </div>
 
-        <div class="data-box">
-            <h3>📊 目前系統內的成績列表</h3>
+        <div>
+            <div class="table-header">
+                <span class="table-title">修課名單 ({{ len .RosterList }} 人)</span>
+            </div>
             <table>
                 <thead>
                     <tr>
-                        <th>學號 (Student ID)</th>
-                        <th>項目 (Item)</th>
-                        <th>分數 (Score)</th>
-                        <th>上傳時間</th>
-                        <th style="width: 80px;">操作</th>
+                        <th>班級</th>
+                        <th>學號 (ID)</th>
+                        <th>姓名</th>
+                        <th>註冊狀態</th>
+                        <th style="width: 40px; text-align:center;">刪除</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{ range .RosterList }}
+                    <tr>
+                        <td>{{ .Class }}</td>
+                        <td style="font-weight: bold;">{{ .StudentID }}</td>
+                        <td>{{ .Name }}</td>
+                        <td>
+                            {{ if .Email }}
+                                <span class="status-badge status-ok">已註冊</span>
+                                <small style="color: #aaa;">({{ .Email }})</small>
+                                <a href="/teacher/student/unbind?student_id={{ .StudentID }}{{ if $.IsAdmin }}&subject={{ $.Subject }}{{ end }}" 
+                                onclick="return confirm('確定要移除此學生的 Email 綁定嗎？這不會刪除成績。')" 
+                                style="text-decoration: none; margin-left: 5px;" title="移除 Email 綁定">🔓</a>
+                            {{ else }}
+                                <span class="status-badge status-missing">未註冊</span>
+                            {{ end }}
+                        </td>
+                        <td style="text-align: center;">
+                            <a href="/teacher/roster/delete-one?student_id={{ .StudentID }}{{ if $.IsAdmin }}&subject={{ $.Subject }}{{ end }}" 
+                               class="delete-link" onclick="return confirm('確定刪除此學生及其成績？')">🗑️</a>
+                        </td>
+                    </tr>
+                    {{ else }}
+                    <tr><td colspan="5" style="text-align:center; padding: 40px; color: #ccc;">無名單資料</td></tr>
+                    {{ end }}
+                </tbody>
+            </table>
+
+            <div class="table-header" style="margin-top: 40px;">
+                <span class="table-title">成績明細 ({{ len .AllGrades }} 筆)</span>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>學號 (ID)</th>
+                        <th>項目</th>
+                        <th>分數</th>
+                        <th style="width: 40px; text-align:center;">刪除</th>
                     </tr>
                 </thead>
                 <tbody>
                     {{ range .AllGrades }}
                     <tr>
-                        <td>{{ .StudentID }}</td>
+                        <td style="font-weight: bold;">{{ .StudentID }}</td>
                         <td>{{ .ItemName }}</td>
-                        <td>{{ .Score }}</td>
-                        <td>{{ .CreatedAt.Format "2006-01-02 15:04" }}</td>
+                        <td style="color: #6a8ecf; font-weight: bold;">{{ .Score }}</td>
                         <td style="text-align: center;">
-                            <form action="/teacher/delete/{{.ID}}" method="POST" onsubmit="return confirm('⚠️ 確定要刪除這筆成績嗎？\n(學號: {{.StudentID}}, 項目: {{.ItemName}})');">
-                                <button type="submit" style="background-color: #ea4335; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;">
-                                    🗑️ 刪除
-                                </button>
-                            </form>
+                            <a href="/teacher/grade/delete?student_id={{ .StudentID }}&item_name={{ .ItemName }}{{ if $.IsAdmin }}&subject={{ $.Subject }}{{ end }}" 
+                               class="delete-link" onclick="return confirm('確定刪除此筆成績？')">🗑️</a>
                         </td>
                     </tr>
                     {{ else }}
-                    <tr>
-                        <td colspan="5" style="text-align:center; color:#999;">目前沒有任何成績資料</td>
-                    </tr>
+                    <tr><td colspan="4" style="text-align:center; padding: 40px; color: #ccc;">暫無成績</td></tr>
                     {{ end }}
                 </tbody>
             </table>
         </div>
     </div>
+
+    <script>
+        window.addEventListener('load', function() {
+            setTimeout(() => { document.getElementById('loading-screen').classList.add('hidden'); }, 500);
+        });
+    </script>
 </body>
 </html>

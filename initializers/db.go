@@ -1,34 +1,38 @@
 package initializers
 
 import (
-	"fmt"
 	"log"
 	"os"
+
+	"grade-system/models"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
-// DB 是一個全域變數，讓其他 package (如 controllers, models) 可以直接使用
 var DB *gorm.DB
 
-// ConnectToDB 負責建立與 PostgreSQL 的連線
 func ConnectToDB() {
 	var err error
-
-	// 從環境變數讀取連線字串 (DSN)
-	dsn := os.Getenv("DB_URL") 
-    // 假設 .env 裡是: DB_URL="host=localhost user=postgres password=password dbname=grades port=5432 sslmode=disable"
 	
+	// 優先讀取 Neon (或 Vercel) 提供的完整連線字串
+	dsn := os.Getenv("DATABASE_URL")
+	
+	// 如果沒有 DATABASE_URL，則退回使用原本的拆分環境變數 (供本地開發備用)
 	if dsn == "" {
-		log.Fatal("DB_URL not found in .env file")
+		dsn = "host=" + os.Getenv("DB_HOST") + 
+			  " user=" + os.Getenv("DB_USER") + 
+			  " password=" + os.Getenv("DB_PASSWORD") + 
+			  " dbname=" + os.Getenv("DB_NAME") + 
+			  " port=" + os.Getenv("DB_PORT") + 
+			  " sslmode=disable TimeZone=Asia/Taipei"
 	}
 
 	DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
-
 	if err != nil {
-		log.Fatal("Failed to connect to database:", err)
+		log.Fatal("資料庫連線失敗: ", err)
 	}
 
-	fmt.Println("Successfully connected to the database!")
+	// 自動遷移
+	DB.AutoMigrate(&models.Student{}, &models.Grade{}, &models.Roster{})
 }

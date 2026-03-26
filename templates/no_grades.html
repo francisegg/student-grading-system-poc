@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>尚未開放 - {{ .AppName }}</title>
+    <link rel="icon" type="image/png" href="/static/cover_egg.png">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8">
+    <style>
+        body { 
+            font-family: "Microsoft JhengHei", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f0f2f5; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            min-height: 100vh; 
+            margin: 0; 
+            color: #333;
+        }
+        
+        .container { 
+            background: white; 
+            padding: 40px; 
+            border-radius: 16px; 
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05); 
+            text-align: center; 
+            width: 100%; 
+            max-width: 400px; 
+            animation: fadeIn 0.6s ease-out;
+            border: 1px solid #fff;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .icon { font-size: 4rem; margin-bottom: 20px; display: block; }
+        
+        h2 { margin: 0 0 10px 0; color: #5f6368; }
+        
+        p { color: #888; margin-bottom: 30px; line-height: 1.6; }
+
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            background: #4285F4;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: bold;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-sizing: border-box;
+        }
+
+        .btn:hover {
+            background: #3367D6;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(66, 133, 244, 0.3);
+        }
+        
+        .badge {
+            display: inline-block;
+            background: #fce8e6;
+            color: #c5221f;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <span class="icon">📭</span>
+        <div class="badge">{{ .Subject }}</div>
+        <h2>目前尚無成績資料</h2>
+        <p>
+            老師尚未上傳本課程的任何成績。<br>
+            請您稍後再來查看！
+        </p>
+        
+        <a href="/" class="btn">
+            ⬅ 返回首頁
+        </a>
+    </div>
+
+</body>
+</html>
