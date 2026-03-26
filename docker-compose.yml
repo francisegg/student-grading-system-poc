@@ -115,6 +115,19 @@ services:
     networks:
       - grade_net
 
+        # --- 6. Cloudflare Tunnel ---
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared_tunnel
+    restart: always
+    environment:
+      - TUNNEL_TOKEN=${TOKEN} # 請在 .env 設定你的 Token
+    command: tunnel --no-autoupdate run --protocol http2
+    networks:
+      - grade_net # 必須與 nginx 在同一個網路
+    depends_on:
+      - nginx
+
 volumes:
   pg_data:
 
