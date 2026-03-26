@@ -1,8 +1,8 @@
 module grade-system
 
-go 1.24.0
+go 1.21.0
 
-toolchain go1.24.11
+toolchain go1.21.11
 
 require (
 	github.com/gin-contrib/sessions v1.0.4
