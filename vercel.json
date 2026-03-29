@@ -2,7 +2,7 @@
   "version": 2,
   "functions": {
     "api/index.go": {
-      "includeFiles": "templates/**,static/**"
+      "includeFiles": "../templates/**,../static/**"
     }
   },
   "rewrites": [
