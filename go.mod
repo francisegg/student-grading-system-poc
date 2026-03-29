@@ -5,8 +5,8 @@ go 1.21.0
 toolchain go1.21.11
 
 require (
-	github.com/gin-contrib/sessions v1.0.4
-	github.com/gin-gonic/gin v1.11.0
+	github.com/gin-contrib/sessions v0.0.5
+	github.com/gin-gonic/gin v1.9.1
 	github.com/joho/godotenv v1.5.1
 	golang.org/x/oauth2 v0.17.0
 	golang.org/x/text v0.14.0
