@@ -1,6 +1,6 @@
 {
   "functions": {
-    "api/index.go": {
+    "./api/index.go": {
       "includeFiles": "{templates/**,static/**}"
     }
   },
