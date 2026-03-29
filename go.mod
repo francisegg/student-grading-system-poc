@@ -8,7 +8,7 @@ require (
 	github.com/gin-contrib/sessions v1.0.4
 	github.com/gin-gonic/gin v1.11.0
 	github.com/joho/godotenv v1.5.1
-	golang.org/x/oauth2 v0.34.0
+	golang.org/x/oauth2 v0.17.0
 	golang.org/x/text v0.32.0
 	gorm.io/driver/postgres v1.6.0
 	gorm.io/gorm v1.31.1
