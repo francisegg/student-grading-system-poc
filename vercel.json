@@ -1,15 +1,6 @@
 {
   "version": 2,
-  "functions": {
-    "api/**/*.go": {
-      "includeFiles": "{templates,static}/**"
-    }
-  },
   "rewrites": [
-    {
-      "source": "/static/(.*)",
-      "destination": "/static/$1"
-    },
     {
       "source": "/(.*)",
       "destination": "/api"
