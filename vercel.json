@@ -1,13 +1,9 @@
 {
-  "functions": {
-    "api/index.go": {
-      "includeFiles": "{templates/**,static/**}"
-    }
-  },
+  "version": 2,
   "rewrites": [
     {
       "source": "/(.*)",
-      "destination": "/api/index.go"
+      "destination": "/api"
     }
   ]
 }

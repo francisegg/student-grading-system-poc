@@ -1,5 +1,4 @@
-package api
-
+package main
 import (
 	"net/http"
 	"grade-system/router"

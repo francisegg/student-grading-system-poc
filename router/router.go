@@ -1,7 +1,10 @@
 package router
 
 import (
+	"embed"
 	"html/template"
+	"io/fs"
+	"net/http"
 	"os"
 
 	"grade-system/controllers"
@@ -14,6 +17,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+//go:embed templates/*
+var templatesFS embed.FS
+
+//go:embed static/*
+var staticFS embed.FS
+
 // SetupRouter 初始化並回傳設定好的 Gin 引擎
 func SetupRouter() *gin.Engine {
 	initializers.LoadEnvVariables()
@@ -22,12 +31,15 @@ func SetupRouter() *gin.Engine {
 
 	r := gin.Default()
 
-	// 靜態檔案與樣板
-	r.Static("/static", "./static")
-	r.SetFuncMap(template.FuncMap{
+	// 1. 設定靜態檔案 (使用 embed，不依賴外部資料夾)
+	subStatic, _ := fs.Sub(staticFS, "static")
+	r.StaticFS("/static", http.FS(subStatic))
+
+	// 2. 設定 HTML 樣板 (使用 embed，不依賴外部資料夾)
+	templ := template.Must(template.New("").Funcs(template.FuncMap{
 		"inc": utils.Inc,
-	})
-	r.LoadHTMLGlob("templates/*")
+	}).ParseFS(templatesFS, "templates/*"))
+	r.SetHTMLTemplate(templ)
 
 	// Session 設定
 	store := cookie.NewStore([]byte(os.Getenv("SESSION_SECRET")))
@@ -49,7 +61,7 @@ func SetupRouter() *gin.Engine {
 		teacher.GET("/dashboard", controllers.TeacherDashboard)
 		teacher.POST("/upload", controllers.UploadGrades)
 		teacher.POST("/upload-roster", controllers.UploadRoster)
-		
+
 		teacher.POST("/roster/post", controllers.PostRoster)
 		teacher.POST("/grade/post", controllers.PostGrade)
 		teacher.GET("/grade/delete", controllers.DeleteGrade)
